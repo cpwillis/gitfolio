@@ -120,7 +120,7 @@ footer a:hover{color:var(--accent)}
     a.href = isBig ? r.site : r.repoUrl
     a.target = '_blank'; a.rel = 'noopener'
     if (isBig) {
-      const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png'
+      const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png' + q
       img.alt = r.name; img.width = 1200; img.height = 750; img.loading = 'lazy'
       a.append(img)
     }
@@ -131,8 +131,13 @@ footer a:hover{color:var(--accent)}
     }
     return a
   }
+  // /<username> picks whose portfolio this is; / falls back to the deployment's own account.
+  const asked = decodeURIComponent(location.pathname.slice(1).split('/')[0] || '')
+  const q = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(asked) ? '?user=' + asked : ''
   try {
-    const { profile, big, small } = await (await fetch('/api/repos')).json()
+    const res = await fetch('/api/repos' + q)
+    if (!res.ok) throw new Error(res.status)
+    const { profile, big, small } = await res.json()
     // markup carries plausible defaults so the headline never flashes; this corrects drift,
     // and is what makes a fork work without editing the HTML at all
     if (profile?.name) {
@@ -144,6 +149,7 @@ footer a:hover{color:var(--accent)}
       const gh = document.getElementById('gh')
       gh.href = 'https://github.com/' + profile.login
       gh.textContent = 'github.com/' + profile.login
+      document.querySelector('link[rel="icon"]').href = '/favicon.svg' + q
     }
     host.textContent = ''
     if (big.length) {
@@ -154,7 +160,9 @@ footer a:hover{color:var(--accent)}
     }
   } catch {
     host.textContent = ''
-    host.append(el('p', 'feed', 'Could not reach the GitHub feed just now.'))
+    host.append(el('p', 'feed', asked
+      ? 'No public GitHub profile found for "' + asked + '".'
+      : 'Could not reach the GitHub feed just now.'))
   }
 })()
 </script>

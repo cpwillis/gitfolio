@@ -12,6 +12,20 @@ const key = k => new Request(`https://x/v${CACHE_V}/${k}`)
 // Two repos are never worth showing and both are derivable, so neither needs configuring:
 // the profile README (always named after the account) and the portfolio itself (its homepage
 // is the host you are reading this on).
+// GitHub usernames: alphanumeric and single hyphens, 39 max. Anything else is not a user.
+const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/
+const validUser = u => typeof u === 'string' && USER_RE.test(u)
+
+// A repo homepage is attacker-controllable once any username can be requested, so refuse
+// anything that is not a public http(s) host before it reaches fetch or the browser.
+const PRIVATE = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[|.*\.internal$|.*\.local$)/i
+const safeSite = u => {
+  try {
+    const { protocol, hostname } = new URL(u)
+    return (protocol === 'https:' || protocol === 'http:') && hostname.includes('.') && !PRIVATE.test(hostname)
+  } catch { return false }
+}
+
 const bareHost = h => String(h || '').replace(/^www\./, '').toLowerCase()
 const isSelf = (r, user, host, extra) => {
   const n = r.name.toLowerCase()
@@ -47,7 +61,7 @@ async function repos(user) {
         lang: x.language,
         stars: x.stargazers_count,
         repoUrl: x.html_url,
-        site: withScheme(x.homepage),
+        site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
       }))
       return new Response(JSON.stringify(data), {
         headers: { 'content-type': 'application/json', 'cache-control': `max-age=${REPOS_TTL}` },
@@ -88,11 +102,11 @@ async function live(url) {
   return (await res.text()) === '1'
 }
 
-const shotKey = name => `shot/${name}`
+const shotKey = (user, name) => `${user}/shot/${name}`
 
 // Capture and cache. Called in the background so a cold snapshot never blocks the page.
-async function capture(name, url, env) {
-  return cached(shotKey(name), async () => {
+async function capture(user, name, url, env) {
+  return cached(shotKey(user, name), async () => {
     try {
       const r = await env.BROWSER.quickAction('screenshot', { url, viewport: { width: 1200, height: 750 } })
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
@@ -143,8 +157,8 @@ async function feed(env, ctx, user, host) {
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
-    if (await cache.match(key(shotKey(r.name)))) return true
-    ctx.waitUntil(capture(r.name, r.site, env))
+    if (await cache.match(key(shotKey(user, r.name)))) return true
+    ctx.waitUntil(capture(user, r.name, r.site, env))
     return false
   }))
   return {
@@ -158,8 +172,11 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url)
 
-    const user = env.GITHUB_USER
+    // ?user= names whose portfolio to serve; falls back to the deployment's own account.
+    const asked = url.searchParams.get('user')
+    const user = asked || env.GITHUB_USER
     if (!user) return new Response('set GITHUB_USER in wrangler.jsonc', { status: 500 })
+    if (!validUser(user)) return new Response('bad username', { status: 400 })
 
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
@@ -182,8 +199,8 @@ export default {
     if (m) {
       const name = decodeURIComponent(m[1])
       const r = visible(await repos(user), user, url.host, hideList(env)).find(x => x.name === name)
-      if (!r || !(await live(r.site))) return new Response(null, { status: 404 })
-      return (await capture(name, r.site, env)) || new Response(null, { status: 404 })
+      if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
+      return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
     return env.ASSETS.fetch(req)
