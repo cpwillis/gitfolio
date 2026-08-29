@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cpwillis</title>
+<meta name="description" content="A portfolio that builds itself from a GitHub profile.">
+<style>
+:root{--bg:#0a0a0b;--fg:#ededef;--dim:#8a8a92;--line:#1e1e21;--accent:#ffc107}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;padding:clamp(2rem,7vw,5rem) clamp(1.25rem,6vw,3rem)}
+main{max-width:64rem;margin:0 auto;position:relative;z-index:1}
+h1{font-size:clamp(2rem,6vw,3.25rem);line-height:1.05;letter-spacing:-.035em;margin:0;font-weight:650}
+.sub{color:var(--dim);margin:.9rem 0 0;font-size:clamp(.95rem,2.2vw,1.05rem)}
+.sub b{color:var(--fg);font-weight:550}
+h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+  font-weight:600;margin:clamp(2.5rem,7vw,4rem) 0 0}
+.wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1.25rem;margin-top:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:.75rem}
+.card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);
+  border-radius:10px;background:#0f0f11;transition:border-color .2s,transform .2s;overflow:hidden}
+.card:hover{border-color:#3a3a40;transform:translateY(-2px)}
+.card b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;font-weight:500}
+.card b::after{content:"\2197";color:var(--dim);margin-left:.4rem;font-size:.8rem}
+.card span{display:block;color:var(--dim);font-size:.88rem}
+.big img{display:block;width:100%;height:auto;background:#131316;border-bottom:1px solid var(--line)}
+.big b{padding:.85rem 1rem .1rem}
+.big span{padding:0 1rem 1rem}
+.sm{padding:.85rem .95rem}
+.sm span{margin-top:.3rem;font-size:.84rem;line-height:1.45}
+.sm em{display:block;margin-top:.5rem;font-style:normal;font-size:.74rem;color:#5f5f68;
+  font-variant-numeric:tabular-nums}
+.skel{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:1.5rem}
+.skel i{display:block;height:7.5rem;border:1px solid var(--line);border-radius:10px;background:#0f0f11;
+  animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){.skel i{animation:none}}
+.feed{margin:2.5rem 0 0;color:#4a4a52;font-size:.78rem}
+.feed a{color:#5f5f68;text-decoration:none;border-bottom:1px solid #26262b}
+.feed a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+footer{margin-top:clamp(3rem,8vw,5rem);padding-top:1.25rem;border-top:1px solid var(--line);
+  color:#5f5f68;font-size:.82rem;text-align:center}
+footer p{margin:0 auto;max-width:52rem}
+footer a{color:var(--dim);text-decoration:none}
+footer a:hover{color:var(--accent)}
+
+/* --- background: drifting glow + slow starfield --- */
+.fx{position:fixed;inset:0;pointer-events:none;z-index:0}
+.fx-glow{inset:-25%;
+  background:radial-gradient(38% 32% at 28% 12%,rgba(255,193,7,.11),transparent 70%),
+             radial-gradient(34% 28% at 78% 4%,rgba(120,110,255,.07),transparent 70%);
+  animation:drift 80s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(4%,3%,0) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){.fx-glow{animation:none}}
+</style>
+</head>
+<body>
+<div class="fx fx-glow"></div>
+<canvas class="fx fx-particles" id="fxp"></canvas>
+<main>
+  <h1><span id="nm">cpwillis</span> makes things.</h1>
+  <p class="sub">Software engineer<span id="loc"></span>. <b>Open one. They are live, not screenshots of a demo video.</b></p>
+  <div id="projects"><div class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  <noscript><p class="feed">Project list needs JavaScript. Everything is at
+    <a href="https://github.com/cpwillis" target="_blank" rel="noopener">github.com/cpwillis</a>.</p></noscript>
+  <footer>
+    <p>Live feed from <a id="gh" href="https://github.com/cpwillis" target="_blank" rel="noopener">github.com/cpwillis</a>. Previews open the site, the rest open the source.</p>
+  </footer>
+</main>
+
+<script>
+{
+  const c = document.getElementById('fxp'), x = c.getContext('2d')
+  const still = matchMedia('(prefers-reduced-motion: reduce)')
+  let w, h, dots
+  const reset = () => {
+    w = c.width = innerWidth; h = c.height = innerHeight
+    dots = Array.from({length: 40}, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - .5) * .12, vy: (Math.random() - .5) * .12,
+      r: Math.random() * 1.4 + .4,
+    }))
+  }
+  const paint = () => {
+    x.clearRect(0, 0, w, h)
+    for (const d of dots) {
+      x.fillStyle = 'rgba(255,255,255,.20)'
+      x.beginPath(); x.arc(d.x, d.y, d.r, 0, 7); x.fill()
+    }
+  }
+  const tick = () => {
+    for (const d of dots) { d.x = (d.x + d.vx + w) % w; d.y = (d.y + d.vy + h) % h }
+    paint()
+    if (!still.matches) requestAnimationFrame(tick)
+  }
+  // resize only re-seeds; it must not start a second rAF loop
+  addEventListener('resize', () => { reset(); if (still.matches) paint() })
+  reset()
+  still.matches ? paint() : tick()
+}
+</script>
+
+<script>
+// Stage 2: the shell is already painted; fetch the repo list and build cards from it.
+// Stage 3: each big card's <img> then pulls its snapshot lazily.
+;(async () => {
+  const host = document.getElementById('projects')
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag)
+    if (cls) n.className = cls
+    if (text != null) n.textContent = text   // textContent, so repo text can never inject markup
+    return n
+  }
+  const card = (r, isBig) => {
+    const a = el('a', 'card ' + (isBig ? 'big' : 'sm'))
+    a.href = isBig ? r.site : r.repoUrl
+    a.target = '_blank'; a.rel = 'noopener'
+    if (isBig) {
+      const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png'
+      img.alt = r.name; img.width = 1200; img.height = 750; img.loading = 'lazy'
+      a.append(img)
+    }
+    a.append(el('b', null, r.name), el('span', null, r.desc || ''))
+    if (!isBig) {
+      const meta = [r.lang, r.stars ? r.stars + '\u2605' : null].filter(Boolean).join(' \u00b7 ')
+      if (meta) a.append(el('em', null, meta))
+    }
+    return a
+  }
+  try {
+    const { profile, big, small } = await (await fetch('/api/repos')).json()
+    // markup carries plausible defaults so the headline never flashes; this corrects drift,
+    // and is what makes a fork work without editing the HTML at all
+    if (profile?.name) {
+      document.getElementById('nm').textContent = profile.name
+      document.title = profile.name + ' makes things'
+    }
+    if (profile?.location) document.getElementById('loc').textContent = ' in ' + profile.location
+    if (profile?.login) {
+      const gh = document.getElementById('gh')
+      gh.href = 'https://github.com/' + profile.login
+      gh.textContent = 'github.com/' + profile.login
+    }
+    host.textContent = ''
+    if (big.length) {
+      const w = el('div', 'wall'); big.forEach(r => w.append(card(r, true))); host.append(w)
+    }
+    if (small.length) {
+      const g = el('div', 'grid'); small.forEach(r => g.append(card(r, false))); host.append(g)
+    }
+  } catch {
+    host.textContent = ''
+    host.append(el('p', 'feed', 'Could not reach the GitHub feed just now.'))
+  }
+})()
+</script>
+</body>
+</html>

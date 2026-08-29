@@ -1,0 +1,26 @@
+{
+  "name": "gitfolio",
+  "main": "src/index.js",
+  // 2026-03-24+ is required for env.BROWSER.quickAction()
+  "compatibility_date": "2026-03-24",
+  // the only thing a fork needs to change
+  "vars": {
+    "GITHUB_USER": "cpwillis",
+    // optional: extra repo names to leave out, comma separated
+    "HIDE_REPOS": "gitfolio"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "browser": {
+    "binding": "BROWSER",
+    // local dev only: proxy to real Browser Rendering instead of a local stub
+    "remote": true
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // only the dynamic routes hit the Worker; the page itself is served straight from assets
+    "run_worker_first": ["/api/*", "/shot/*"]
+  }
+}
