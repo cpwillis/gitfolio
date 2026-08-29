@@ -43,6 +43,17 @@ Not `--local`. The browser binding is `"remote": true`, so the Worker runs local
 screenshots go to the real service. `--local` forces every binding local and screenshots fail
 silently. Check `npx wrangler@4 deploy --dry-run` lists `env.BROWSER` if previews never appear.
 
+## URLs
+
+| URL | Shows |
+| --- | --- |
+| `/` | the account in `GITHUB_USER` |
+| `/<username>` | that GitHub user |
+| `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `paper`. Anything else is the default |
+
+Combine them: `/torvalds?theme=space`. Themes are five CSS custom properties in
+`public/index.html`; copy a block and change the values to add one.
+
 ## How it works
 
 Three stages, each independent, so nothing external delays first paint:

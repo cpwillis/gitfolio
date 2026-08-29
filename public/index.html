@@ -4,9 +4,25 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>cpwillis' GitFolio</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script>
+// set before paint so the page never flashes the default palette
+{
+  const t = new URLSearchParams(location.search).get('theme')
+  if (/^[a-z]{1,16}$/.test(t || '')) document.documentElement.dataset.theme = t
+}
+</script>
 <meta name="description" content="A portfolio that builds itself from a GitHub profile.">
 <style>
-:root{--bg:#0a0a0b;--fg:#ededef;--dim:#8a8a92;--line:#1e1e21;--accent:#ffc107}
+:root{--bg:#0a0a0b;--fg:#ededef;--dim:#8a8a92;--line:#1e1e21;--accent:#ffc107;
+  --glow1:255,193,7;--glow2:120,110,255;--star:255,255,255}
+[data-theme="space"]{--bg:#05060f;--fg:#e8ecff;--dim:#7f88b0;--line:#171b33;--accent:#7aa2ff;
+  --glow1:90,120,255;--glow2:170,90,255;--star:200,215,255}
+[data-theme="cyberpunk"]{--bg:#0b0410;--fg:#f5e6ff;--dim:#a888c0;--line:#2a1038;--accent:#ff2fb9;
+  --glow1:255,47,185;--glow2:0,229,255;--star:255,120,220}
+[data-theme="rainbow"]{--bg:#0a0a0b;--fg:#f4f4f6;--dim:#9a9aa4;--line:#232327;--accent:#ff7a59;
+  --glow1:255,90,120;--glow2:80,200,255;--star:255,235,180}
+[data-theme="paper"]{--bg:#f7f5f0;--fg:#1a1a1c;--dim:#63636c;--line:#e0dcd4;--accent:#b4531f;
+  --glow1:220,140,60;--glow2:120,150,220;--star:120,120,130}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
   font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -20,12 +36,12 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim
 .wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1.25rem;margin-top:1.5rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:.75rem}
 .card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);
-  border-radius:10px;background:#0f0f11;transition:border-color .2s,transform .2s;overflow:hidden}
+  border-radius:10px;background:color-mix(in srgb,var(--fg) 4%,var(--bg));transition:border-color .2s,transform .2s;overflow:hidden}
 .card:hover{border-color:#3a3a40;transform:translateY(-2px)}
 .card b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;font-weight:500}
 .card b::after{content:"\2197";color:var(--dim);margin-left:.4rem;font-size:.8rem}
 .card span{display:block;color:var(--dim);font-size:.88rem}
-.big img{display:block;width:100%;height:auto;background:#131316;border-bottom:1px solid var(--line)}
+.big img{display:block;width:100%;height:auto;background:color-mix(in srgb,var(--fg) 7%,var(--bg));border-bottom:1px solid var(--line)}
 .big b{padding:.85rem 1rem .1rem}
 .big span{padding:0 1rem 1rem}
 .sm{padding:.85rem .95rem}
@@ -33,7 +49,8 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim
 .sm em{display:block;margin-top:.5rem;font-style:normal;font-size:.74rem;color:#5f5f68;
   font-variant-numeric:tabular-nums}
 .skel{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:1.5rem}
-.skel i{display:block;height:7.5rem;border:1px solid var(--line);border-radius:10px;background:#0f0f11;
+.skel i{display:block;height:7.5rem;border:1px solid var(--line);border-radius:10px;
+  background:color-mix(in srgb,var(--fg) 4%,var(--bg));
   animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.45}}
 @media(prefers-reduced-motion:reduce){.skel i{animation:none}}
@@ -49,8 +66,8 @@ footer a:hover{color:var(--accent)}
 /* --- background: drifting glow + slow starfield --- */
 .fx{position:fixed;inset:0;pointer-events:none;z-index:0}
 .fx-glow{inset:-25%;
-  background:radial-gradient(38% 32% at 28% 12%,rgba(255,193,7,.11),transparent 70%),
-             radial-gradient(34% 28% at 78% 4%,rgba(120,110,255,.07),transparent 70%);
+  background:radial-gradient(38% 32% at 28% 12%,rgba(var(--glow1),.11),transparent 70%),
+             radial-gradient(34% 28% at 78% 4%,rgba(var(--glow2),.07),transparent 70%);
   animation:drift 80s ease-in-out infinite alternate}
 @keyframes drift{to{transform:translate3d(4%,3%,0) scale(1.08)}}
 @media(prefers-reduced-motion:reduce){.fx-glow{animation:none}}
@@ -74,6 +91,7 @@ footer a:hover{color:var(--accent)}
 {
   const c = document.getElementById('fxp'), x = c.getContext('2d')
   const still = matchMedia('(prefers-reduced-motion: reduce)')
+  const star = getComputedStyle(document.documentElement).getPropertyValue('--star').trim() || '255,255,255'
   let w, h, dots
   const reset = () => {
     w = c.width = innerWidth; h = c.height = innerHeight
@@ -86,7 +104,7 @@ footer a:hover{color:var(--accent)}
   const paint = () => {
     x.clearRect(0, 0, w, h)
     for (const d of dots) {
-      x.fillStyle = 'rgba(255,255,255,.20)'
+      x.fillStyle = `rgba(${star},.20)`
       x.beginPath(); x.arc(d.x, d.y, d.r, 0, 7); x.fill()
     }
   }
