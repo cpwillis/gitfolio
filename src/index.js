@@ -150,10 +150,16 @@ async function roundAvatar(user) {
 
 // Split into big (live site + snapshot already cached) and small. Snapshot misses are captured
 // in the background, so a repo promotes itself on a later view.
+const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
+
 async function feed(env, ctx, user, host) {
   const hide = hideList(env)
   const [who, all] = await Promise.all([profile(user), repos(user)])
   const list = visible(all, user, host, hide)
+  // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
+  // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
+  // control by creating a repo with an arbitrary homepage.
+  if (!isOwner(env, user)) return { profile: who, big: [], small: list }
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
@@ -173,8 +179,10 @@ export default {
     const url = new URL(req.url)
 
     // ?user= names whose portfolio to serve; falls back to the deployment's own account.
+    // GitHub usernames are case-insensitive, so normalise before anything caches on them.
+    // Otherwise /CpWiLlIs is a distinct cache key and re-captures every screenshot.
     const asked = url.searchParams.get('user')
-    const user = asked || env.GITHUB_USER
+    const user = String(asked || env.GITHUB_USER || '').toLowerCase()
     if (!user) return new Response('set GITHUB_USER in wrangler.jsonc', { status: 500 })
     if (!validUser(user)) return new Response('bad username', { status: 400 })
 
@@ -197,6 +205,7 @@ export default {
 
     const m = url.pathname.match(/^\/shot\/(.+)\.png$/)
     if (m) {
+      if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = decodeURIComponent(m[1])
       const r = visible(await repos(user), user, url.host, hideList(env)).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })

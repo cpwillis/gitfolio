@@ -15,9 +15,16 @@ GitHub data and serves a static page, so the realistic risks are narrow:
 - **Untrusted content.** Repo names and descriptions are third-party strings rendered on the page.
   They are inserted with `textContent`, never `innerHTML`, so they cannot inject markup. Any change
   reintroducing string-built HTML is a security bug.
-- **Screenshots.** The Worker will only screenshot a URL taken from your own repos' `homepage`
-  field, never one supplied in a request. Treat any path that lets a caller choose the target as a
-  vulnerability, since it would make the Worker a request proxy.
+- **Screenshots.** Any GitHub user can be requested at `/<username>`, but screenshots are taken
+  **only** for the account in `GITHUB_USER`. Everyone else renders as small cards. This matters
+  because a repo `homepage` is attacker-controlled — anyone can create a public repo pointing
+  anywhere — so capturing for arbitrary users would turn the Worker into a screenshot proxy and
+  let a visitor spend the account's Browser Rendering quota. Widening this is a security change,
+  not a feature.
+- **Outbound URLs.** Homepages are checked by `safeSite()` before any fetch: http(s) only, and no
+  `localhost`, RFC1918, link-local, `.internal`, `.local`, or hostnames without a dot.
+- **Usernames.** Validated against GitHub's own rule and lowercased before use, so they cannot
+  traverse paths or multiply cache entries.
 - **Profile fields.** Only `login`, `name` and `location` are forwarded. `email`, `company` and
   `bio` are deliberately not exposed, so widening that is a privacy regression.
 
