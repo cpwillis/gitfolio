@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cpwillis</title>
+<title>cpwillis' GitFolio</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="description" content="A portfolio that builds itself from a GitHub profile.">
 <style>
@@ -107,6 +107,8 @@ footer a:hover{color:var(--accent)}
 // Stage 3: each big card's <img> then pulls its snapshot lazily.
 ;(async () => {
   const host = document.getElementById('projects')
+  // a name already ending in s takes a bare apostrophe rather than a second s
+  const possessive = n => n + (/s$/i.test(n) ? "'" : "'s")
   const el = (tag, cls, text) => {
     const n = document.createElement(tag)
     if (cls) n.className = cls
@@ -135,7 +137,7 @@ footer a:hover{color:var(--accent)}
     // and is what makes a fork work without editing the HTML at all
     if (profile?.name) {
       document.getElementById('nm').textContent = profile.name
-      document.title = profile.name + ' makes things'
+      document.title = possessive(profile.name) + ' GitFolio'
     }
     if (profile?.location) document.getElementById('loc').textContent = ' in ' + profile.location
     if (profile?.login) {
