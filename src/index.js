@@ -140,6 +140,10 @@ export default {
       })
     }
 
+    // Icons come from the profile picture, so they follow the avatar with nothing to commit.
+    const icon = { '/favicon.ico': 64, '/apple-touch-icon.png': 180 }[url.pathname]
+    if (icon) return Response.redirect(`https://github.com/${user}.png?size=${icon}`, 302)
+
     const m = url.pathname.match(/^\/shot\/(.+)\.png$/)
     if (m) {
       const name = decodeURIComponent(m[1])

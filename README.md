@@ -70,8 +70,8 @@ costs well under a minute a day. Everything else is static assets and cached API
 - `public/index.html` — the whole page, one `<style>` block, no dependencies
 - `src/index.js` — Worker: `/api/repos`, `/shot/*`, caching, liveness
 
-Drop a `favicon.ico` and `apple-touch-icon.png` into `public/` to get your own icons. Browsers find
-both at the root without any `<link>` tag; without them you just get the browser default.
+Icons are your GitHub profile picture: `/favicon.ico` and `/apple-touch-icon.png` redirect to it,
+so there is nothing to commit and they follow your avatar when you change it.
 
 ## Licence
 
