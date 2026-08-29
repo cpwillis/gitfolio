@@ -21,6 +21,6 @@
     "directory": "./public",
     "binding": "ASSETS",
     // only the dynamic routes hit the Worker; the page itself is served straight from assets
-    "run_worker_first": ["/api/*", "/shot/*", "/favicon.ico", "/apple-touch-icon.png"]
+    "run_worker_first": ["/api/*", "/shot/*", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"]
   }
 }

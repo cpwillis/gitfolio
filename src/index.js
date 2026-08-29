@@ -106,6 +106,34 @@ async function capture(name, url, env) {
   })
 }
 
+const b64 = buf => {
+  const bytes = new Uint8Array(buf)
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    out += String.fromCharCode(...bytes.subarray(i, i + 0x8000))  // chunked: spreading it all blows the stack
+  }
+  return btoa(out)
+}
+
+// The avatar is square; clip it to a circle and inline it so the SVG has no external reference.
+async function roundAvatar(user) {
+  return cached(`${user}/favicon`, async () => {
+    try {
+      const r = await fetch(`https://github.com/${user}.png?size=180`, { redirect: 'follow' })
+      if (!r.ok) throw new Error(r.status)
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+        `<clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath>` +
+        `<image href="data:image/png;base64,${b64(await r.arrayBuffer())}" ` +
+        `width="100" height="100" clip-path="url(#c)"/></svg>`
+      return new Response(svg, {
+        headers: { 'content-type': 'image/svg+xml', 'cache-control': `max-age=${SHOT_TTL}` },
+      })
+    } catch {
+      return null
+    }
+  })
+}
+
 // Split into big (live site + snapshot already cached) and small. Snapshot misses are captured
 // in the background, so a repo promotes itself on a later view.
 async function feed(env, ctx, user, host) {
@@ -141,6 +169,12 @@ export default {
     }
 
     // Icons come from the profile picture, so they follow the avatar with nothing to commit.
+    // SVG favicons render in a restricted mode that blocks external refs, so the avatar has to be
+    // inlined. iOS rounds apple-touch-icon itself, so that one stays a plain redirect.
+    if (url.pathname === '/favicon.svg') {
+      const svg = await roundAvatar(user)
+      if (svg) return svg
+    }
     const icon = { '/favicon.ico': 64, '/apple-touch-icon.png': 180 }[url.pathname]
     if (icon) return Response.redirect(`https://github.com/${user}.png?size=${icon}`, 302)
 
