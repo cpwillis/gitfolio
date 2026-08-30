@@ -45,6 +45,16 @@ Not `--local`. The browser binding is `"remote": true`, so the Worker runs local
 screenshots go to the real service. `--local` forces every binding local and screenshots fail
 silently. Check `npx wrangler@4 deploy --dry-run` lists `env.BROWSER` if previews never appear.
 
+`/<username>` does nothing locally, because `localhost` is not in `MULTI_USER_HOSTS` and the
+requested username is ignored on any host that is not listed. That is the gate working, not a bug.
+Rather than weakening the shipped config, override it for local runs only in `.dev.vars`:
+
+```
+MULTI_USER_HOSTS=localhost
+```
+
+`.dev.vars` is gitignored, so it never reaches a commit or a deployment.
+
 ## URLs
 
 | URL | Shows |
