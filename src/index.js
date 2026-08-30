@@ -4,8 +4,6 @@ const LIVE_TTL = 900
 const SHOT_TTL = 86400
 const PENDING_TTL = 300   // back-off before retrying a capture that failed
 
-const NEW_TAB = 'target="_blank" rel="noopener"'
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
 const key = k => new Request(`https://x/v${CACHE_V}/${k}`)
