@@ -37,7 +37,7 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:.75rem}
 .card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);
   border-radius:10px;background:color-mix(in srgb,var(--fg) 4%,var(--bg));transition:border-color .2s,transform .2s;overflow:hidden}
-.card:hover{border-color:#3a3a40;transform:translateY(-2px)}
+.card:hover{border-color:color-mix(in srgb,var(--line) 60%,var(--fg));transform:translateY(-2px)}
 .card b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;font-weight:500}
 .card b::after{content:"\2197";color:var(--dim);margin-left:.4rem;font-size:.8rem}
 .card span{display:block;color:var(--dim);font-size:.88rem}
