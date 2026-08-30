@@ -133,13 +133,16 @@ footer a:hover{color:var(--accent)}
     if (text != null) n.textContent = text   // textContent, so repo text can never inject markup
     return n
   }
-  const card = (r, isBig) => {
+  const card = (r, isBig, i) => {
     const a = el('a', 'card ' + (isBig ? 'big' : 'sm'))
     a.href = isBig ? r.site : r.repoUrl
     a.target = '_blank'; a.rel = 'noopener'
     if (isBig) {
       const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png' + q
-      img.alt = r.name; img.width = 1200; img.height = 750; img.loading = 'lazy'
+      img.alt = r.name; img.width = 1200; img.height = 750; img.decoding = 'async'
+      // the first preview is the LCP element and is above the fold, so it must not be lazy
+      img.loading = i ? 'lazy' : 'eager'
+      img.fetchPriority = i ? 'auto' : 'high'
       a.append(img)
     }
     a.append(el('b', null, r.name), el('span', null, r.desc || ''))
@@ -171,10 +174,10 @@ footer a:hover{color:var(--accent)}
     }
     host.textContent = ''
     if (big.length) {
-      const w = el('div', 'wall'); big.forEach(r => w.append(card(r, true))); host.append(w)
+      const w = el('div', 'wall'); big.forEach((r, i) => w.append(card(r, true, i))); host.append(w)
     }
     if (small.length) {
-      const g = el('div', 'grid'); small.forEach(r => g.append(card(r, false))); host.append(g)
+      const g = el('div', 'grid'); small.forEach((r, i) => g.append(card(r, false, i + 1))); host.append(g)
     }
   } catch {
     host.textContent = ''
