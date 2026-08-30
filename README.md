@@ -77,6 +77,17 @@ still showing your other deployments. That host rule cannot fire on `*.workers.d
 If you put this behind a proxy or a second domain, forward the visitor's hostname as
 `x-forwarded-host` so the self-check sees the address the visitor actually typed.
 
+## Caching
+
+Repo and profile data is keyed by the deployed Worker version, so **every deploy starts from a cold
+data cache** with nothing to bump by hand. Screenshots are deliberately keyed separately: they cost
+Browser Rendering minutes and their content does not depend on your code, so a deploy must not
+throw them away. `CACHE_V` in `src/index.js` only exists for those, and only needs bumping if the
+image format itself changes.
+
+Cloudflare partitions its newer Workers Cache by version automatically, but not `caches.default`,
+which is what this uses.
+
 ## Cost
 
 Screenshots use [Browser Rendering](https://developers.cloudflare.com/browser-run/). Workers Free

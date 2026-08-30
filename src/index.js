@@ -1,4 +1,4 @@
-const CACHE_V = 10          // bump whenever a cached payload's shape or filtering changes
+const CACHE_V = 10        // only for image payloads: bump if their format changes
 const REPOS_TTL = 3600
 const LIVE_TTL = 900
 const SHOT_TTL = 86400
@@ -7,7 +7,16 @@ const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
-const key = k => new Request(`https://x/v${CACHE_V}/${k}`)
+// Cloudflare partitions the newer Workers Cache by version, but NOT caches.default, so a deploy
+// has to invalidate the data cache itself. Written once per isolate; a version cannot change
+// under one, so this is constant in practice rather than mutable state.
+let VERSION = ''
+const setVersion = env => { VERSION = VERSION || env.CF_VERSION_METADATA?.id || `dev${CACHE_V}` }
+
+// Data follows the deploy. Images deliberately do not: they cost Browser Rendering minutes and
+// their content has nothing to do with the code version, so a deploy must not re-capture them.
+const key = k => new Request(`https://x/${VERSION}/${k}`)
+const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 
 // Two repos are never worth showing and both are derivable, so neither needs configuring:
 // the profile README (always named after the account) and the portfolio itself (its homepage
@@ -52,12 +61,12 @@ const listFor = async (env, user, host) => {
   return { data: visible(all.data, user, host, isOwner(env, user) ? hideList(env) : []) }
 }
 
-async function cached(k, build) {
+async function cached(k, build, mk = key) {
   const cache = caches.default
-  const hit = await cache.match(key(k))
+  const hit = await cache.match(mk(k))
   if (hit) return hit
   const res = await build()
-  if (res) await cache.put(key(k), res.clone())
+  if (res) await cache.put(mk(k), res.clone())
   return res
 }
 
@@ -140,7 +149,7 @@ async function capture(user, name, url, env) {
       console.error(`screenshot failed for ${name} (${url}):`, e.message)
       return null
     }
-  })
+  }, imgKey)
 }
 
 
@@ -160,7 +169,7 @@ async function roundAvatar(user) {
     } catch {
       return null
     }
-  })
+  }, imgKey)
 }
 
 // Split into big (live site + snapshot already cached) and small. Snapshot misses are captured
@@ -180,7 +189,7 @@ async function feed(env, ctx, user, host) {
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
-    if (await cache.match(key(shotKey(user, r.name)))) return true
+    if (await cache.match(imgKey(shotKey(user, r.name)))) return true
     // capture() returns null on failure and nulls are never cached, so without this marker a repo
     // that always fails would queue a fresh ~2s browser job on every request, forever.
     const pending = `${user}/pending/${r.name}`
@@ -202,6 +211,7 @@ async function feed(env, ctx, user, host) {
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url)
+    setVersion(env)
 
     // ?user= names whose portfolio to serve; falls back to the deployment's own account.
     // GitHub usernames are case-insensitive, so normalise before anything caches on them.
