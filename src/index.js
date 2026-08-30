@@ -1,7 +1,8 @@
-const CACHE_V = 6          // bump whenever a cached payload's shape or filtering changes
+const CACHE_V = 8          // bump whenever a cached payload's shape or filtering changes
 const REPOS_TTL = 3600
 const LIVE_TTL = 900
 const SHOT_TTL = 86400
+const PENDING_TTL = 300   // back-off before retrying a capture that failed
 
 const NEW_TAB = 'target="_blank" rel="noopener"'
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -96,7 +97,8 @@ async function live(url) {
   if (!url) return false
   const res = await cached(`live/${encodeURIComponent(url)}`, async () => {
     let ok = false
-    try { ok = (await fetch(url, { redirect: 'follow' })).ok } catch { ok = false }
+    // no timeout here means one hung homepage stalls the entire feed response
+    try { ok = (await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(2000) })).ok } catch { ok = false }
     return new Response(ok ? '1' : '', { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
   })
   return (await res.text()) === '1'
@@ -174,7 +176,13 @@ async function feed(env, ctx, user, host) {
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
     if (await cache.match(key(shotKey(user, r.name)))) return true
-    ctx.waitUntil(capture(user, r.name, r.site, env))
+    // capture() returns null on failure and nulls are never cached, so without this marker a repo
+    // that always fails would queue a fresh ~2s browser job on every request, forever.
+    const pending = `${user}/pending/${r.name}`
+    if (!(await cache.match(key(pending)))) {
+      ctx.waitUntil(cache.put(key(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } })))
+      ctx.waitUntil(capture(user, r.name, r.site, env))
+    }
     return false
   }))
   return {
