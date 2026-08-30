@@ -76,7 +76,22 @@ footer a:hover{color:var(--accent)}
 <canvas class="fx fx-particles" id="fxp"></canvas>
 <main>
   <h1><span id="nm">cpwillis</span> makes things.</h1>
-  <p class="sub">Software engineer<span id="loc"></span>. <b>Open one. They are live, not screenshots of a demo video.</b></p>
+  <p class="sub"><span id="role">Software engineer</span><span id="loc"></span>. <b>Open one. They are running right now.</b></p>
+<script>
+// Runs during parse, before the header paints. The shipped markup names the deployment's own
+// account, which is right for "/" but wrong the moment the path names somebody else.
+{
+  const u = location.pathname.slice(1).split('/')[0]
+  if (u) {
+    let name = u
+    try { name = decodeURIComponent(u) } catch {}
+    document.getElementById('nm').textContent = name
+    document.title = name + (/s$/i.test(name) ? "'" : "'s") + ' GitFolio'
+    // no basis for calling a stranger a software engineer
+    document.getElementById('role').textContent = ''
+  }
+}
+</script>
   <div id="projects" role="status" aria-busy="true"><div class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
   <noscript><p class="feed">Project list needs JavaScript. Everything is at
     <a href="https://github.com/cpwillis" target="_blank" rel="noopener">github.com/cpwillis</a>.</p></noscript>
@@ -160,14 +175,18 @@ footer a:hover{color:var(--accent)}
   try {
     const res = await fetch('/api/repos' + q)
     if (!res.ok) throw new Error(res.status)   // 404 means no such account, anything else is us
-    const { profile, big, small } = await res.json()
+    const { profile, owner, big, small } = await res.json()
     // markup carries plausible defaults so the headline never flashes; this corrects drift,
     // and is what makes a fork work without editing the HTML at all
     if (profile?.name) {
       document.getElementById('nm').textContent = profile.name
       document.title = possessive(profile.name) + ' GitFolio'
     }
-    if (profile?.location) document.getElementById('loc').textContent = ' in ' + profile.location
+    const role = document.getElementById('role')
+    if (!owner) role.textContent = ''
+    if (profile?.location) {
+      document.getElementById('loc').textContent = (role.textContent ? ' in ' : '') + profile.location
+    }
     if (profile?.login) {
       const gh = document.getElementById('gh')
       gh.href = 'https://github.com/' + profile.login

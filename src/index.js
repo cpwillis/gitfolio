@@ -170,7 +170,7 @@ async function feed(env, ctx, user, host) {
   // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
   // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
   // control by creating a repo with an arbitrary homepage.
-  if (!isOwner(env, user)) return { profile: who.data, big: [], small: list }
+  if (!isOwner(env, user)) return { profile: who.data, owner: false, big: [], small: list }
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
@@ -187,6 +187,7 @@ async function feed(env, ctx, user, host) {
   }))
   return {
     profile: who.data,
+    owner: true,
     big: list.filter((_, i) => state[i]),
     small: list.filter((_, i) => !state[i]),
   }
