@@ -9,9 +9,10 @@ const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`
 
 // Cloudflare partitions the newer Workers Cache by version, but NOT caches.default, so a deploy
 // has to invalidate the data cache itself. Written once per isolate; a version cannot change
-// under one, so this is constant in practice rather than mutable state.
+// under one, so this is constant in practice rather than mutable state. The binding is present
+// in local dev too, which is why a new `wrangler dev` starts from a cold data cache.
 let VERSION = ''
-const setVersion = env => { VERSION = VERSION || env.CF_VERSION_METADATA?.id || `dev${CACHE_V}` }
+const setVersion = env => { VERSION = VERSION || env.CF_VERSION_METADATA.id }
 
 // Data follows the deploy. Images deliberately do not: they cost Browser Rendering minutes and
 // their content has nothing to do with the code version, so a deploy must not re-capture them.
