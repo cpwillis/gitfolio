@@ -31,15 +31,13 @@ main{max-width:64rem;margin:0 auto;position:relative;z-index:1}
 h1{font-size:clamp(2rem,6vw,3.25rem);line-height:1.05;letter-spacing:-.035em;margin:0;font-weight:650}
 .sub{color:var(--dim);margin:.9rem 0 0;font-size:clamp(.95rem,2.2vw,1.05rem)}
 .sub b{color:var(--fg);font-weight:550}
-h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
-  font-weight:600;margin:clamp(2.5rem,7vw,4rem) 0 0}
 .wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1.25rem;margin-top:1.5rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:.75rem}
 .card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);
   border-radius:10px;background:color-mix(in srgb,var(--fg) 4%,var(--bg));transition:border-color .2s,transform .2s;overflow:hidden}
 .card:hover{border-color:color-mix(in srgb,var(--line) 60%,var(--fg));transform:translateY(-2px)}
 .card b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;font-weight:500}
-.card b::after{content:"\2197";color:var(--dim);margin-left:.4rem;font-size:.8rem}
+.card b::after{content:"\2197" / "";color:var(--dim);margin-left:.4rem;font-size:.8rem}
 .card span{display:block;color:var(--dim);font-size:.88rem}
 .big img{display:block;width:100%;height:auto;background:color-mix(in srgb,var(--fg) 7%,var(--bg));border-bottom:1px solid var(--line)}
 .big b{padding:.85rem 1rem .1rem}
@@ -79,7 +77,7 @@ footer a:hover{color:var(--accent)}
 <main>
   <h1><span id="nm">cpwillis</span> makes things.</h1>
   <p class="sub">Software engineer<span id="loc"></span>. <b>Open one. They are live, not screenshots of a demo video.</b></p>
-  <div id="projects"><div class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div id="projects" role="status" aria-busy="true"><div class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
   <noscript><p class="feed">Project list needs JavaScript. Everything is at
     <a href="https://github.com/cpwillis" target="_blank" rel="noopener">github.com/cpwillis</a>.</p></noscript>
   <footer>
@@ -139,7 +137,7 @@ footer a:hover{color:var(--accent)}
     a.target = '_blank'; a.rel = 'noopener'
     if (isBig) {
       const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png' + q
-      img.alt = r.name; img.width = 1200; img.height = 750; img.decoding = 'async'
+      img.alt = ''; img.width = 1200; img.height = 750; img.decoding = 'async'
       // the first preview is the LCP element and is above the fold, so it must not be lazy
       img.loading = i ? 'lazy' : 'eager'
       img.fetchPriority = i ? 'auto' : 'high'
@@ -183,8 +181,11 @@ footer a:hover{color:var(--accent)}
     if (small.length) {
       const g = el('div', 'grid'); small.forEach((r, i) => g.append(card(r, false, i + 1))); host.append(g)
     }
+    if (!big.length && !small.length) host.append(el('p', 'feed', 'No public repositories to show.'))
+    host.setAttribute('aria-busy', 'false')
   } catch (e) {
     host.textContent = ''
+    host.setAttribute('aria-busy', 'false')
     host.append(el('p', 'feed', String(e.message) === '404' && asked
       ? 'No public GitHub profile found for "' + asked + '".'
       : 'Could not reach the GitHub feed just now.'))
