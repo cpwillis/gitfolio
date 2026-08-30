@@ -48,50 +48,42 @@ async function cached(k, build) {
   return res
 }
 
-// Every public, non-fork repo on the profile. The unauthenticated endpoint returns public only.
-async function repos(user) {
-  const res = await cached(`${user}/repos`, async () => {
+// One shape for every GitHub read: fetch, cache the mapped result, fall back to null.
+// ponytail: a rate limit on a cold cache yields an empty feed. Move to KV if it ever bites.
+async function ghCached(cacheKey, path, map) {
+  const res = await cached(cacheKey, async () => {
     try {
-      const r = await fetch(`https://api.github.com/users/${user}/repos?per_page=100&sort=updated`, {
-        headers: { 'user-agent': user, accept: 'application/vnd.github+json' },
+      const r = await fetch(`https://api.github.com${path}`, {
+        headers: { 'user-agent': 'gitfolio', accept: 'application/vnd.github+json' },
       })
       if (!r.ok) throw new Error(r.status)
-      const data = (await r.json()).filter(x => !x.fork && !x.private).map(x => ({
-        name: x.name,
-        desc: x.description || '',
-        lang: x.language,
-        stars: x.stargazers_count,
-        repoUrl: x.html_url,
-        site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
-      }))
-      return new Response(JSON.stringify(data), {
-        headers: { 'content-type': 'application/json', 'cache-control': `max-age=${REPOS_TTL}` },
-      })
-    } catch {
-      // ponytail: rate limit on a cold cache yields an empty feed. Move to KV if it ever bites.
-      return null
-    }
-  })
-  return res ? res.json() : []
-}
-
-// Only name and location. Deliberately not exposing bio/company/email from the profile.
-async function profile(user) {
-  const res = await cached(`${user}/profile`, async () => {
-    try {
-      const r = await fetch(`https://api.github.com/users/${user}`, {
-        headers: { 'user-agent': user, accept: 'application/vnd.github+json' },
-      })
-      if (!r.ok) throw new Error(r.status)
-      const u = await r.json()
-      return Response.json({ login: u.login, name: u.name || u.login, location: u.location || '' },
-        { headers: { 'cache-control': `max-age=${REPOS_TTL}` } })
+      return Response.json(map(await r.json()), { headers: { 'cache-control': `max-age=${REPOS_TTL}` } })
     } catch {
       return null
     }
   })
   return res ? res.json() : null
 }
+
+// Every public, non-fork repo on the profile. The unauthenticated endpoint returns public only.
+const repos = async user =>
+  (await ghCached(`${user}/repos`, `/users/${user}/repos?per_page=100&sort=updated`, list =>
+    list.filter(x => !x.fork && !x.private).map(x => ({
+      name: x.name,
+      desc: x.description || '',
+      lang: x.language,
+      stars: x.stargazers_count,
+      repoUrl: x.html_url,
+      site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
+    })))) || []
+
+// Only login, name and location. Deliberately not exposing bio/company/email.
+const profile = user =>
+  ghCached(`${user}/profile`, `/users/${user}`, u => ({
+    login: u.login,
+    name: u.name || u.login,
+    location: u.location || '',
+  }))
 
 async function live(url) {
   if (!url) return false
