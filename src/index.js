@@ -208,7 +208,7 @@ export default {
     const m = url.pathname.match(/^\/shot\/(.+)\.png$/)
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
-      const name = decodeURIComponent(m[1])
+      const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
       const r = (await listFor(env, user, url.host)).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })

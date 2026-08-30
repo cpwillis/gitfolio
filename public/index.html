@@ -155,7 +155,9 @@ footer a:hover{color:var(--accent)}
   // /<username> picks whose portfolio this is; / falls back to the deployment's own account.
   // validation lives in the Worker, which is the only place it can be enforced; duplicating the
   // rule here just meant an invalid name silently fell back to the owner's portfolio
-  const asked = decodeURIComponent(location.pathname.slice(1).split('/')[0] || '')
+  // a malformed escape here would throw before the try below and leave the skeleton up forever
+  let asked = ''
+  try { asked = decodeURIComponent(location.pathname.slice(1).split('/')[0] || '') } catch {}
   const q = asked ? '?user=' + encodeURIComponent(asked) : ''
   try {
     const res = await fetch('/api/repos' + q)
