@@ -1,8 +1,9 @@
-const CACHE_V = 8          // bump whenever a cached payload's shape or filtering changes
+const CACHE_V = 10          // bump whenever a cached payload's shape or filtering changes
 const REPOS_TTL = 3600
 const LIVE_TTL = 900
 const SHOT_TTL = 86400
 const PENDING_TTL = 300   // back-off before retrying a capture that failed
+const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
@@ -39,7 +40,11 @@ const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, us
 
 // Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
 // this list not containing the name, so the two must never drift apart.
-const listFor = async (env, user, host) => visible(await repos(user), user, host, hideList(env))
+const listFor = async (env, user, host) => {
+  const all = await repos(user)
+  if (all.error) return all
+  return { data: visible(all.data, user, host, hideList(env)) }
+}
 
 async function cached(k, build) {
   const cache = caches.default
@@ -52,19 +57,25 @@ async function cached(k, build) {
 
 // One shape for every GitHub read: fetch, cache the mapped result, fall back to null.
 // ponytail: a rate limit on a cold cache yields an empty feed. Move to KV if it ever bites.
+// Returns { data } or { error: <upstream status> }. The status is carried so a user who does not
+// exist (404) can be told so, rather than being blamed on the feed being down.
 async function ghCached(cacheKey, path, map) {
   const res = await cached(cacheKey, async () => {
+    let status = 502
     try {
       const r = await fetch(`https://api.github.com${path}`, {
         headers: { 'user-agent': 'gitfolio', accept: 'application/vnd.github+json' },
       })
-      if (!r.ok) throw new Error(r.status)
-      return Response.json(map(await r.json()), { headers: { 'cache-control': `max-age=${REPOS_TTL}` } })
+      status = r.status
+      if (!r.ok) throw new Error(status)
+      return Response.json({ data: map(await r.json()) }, { headers: { 'cache-control': `max-age=${REPOS_TTL}` } })
     } catch {
-      return null
+      // Remember the failure briefly. Without this, a nonexistent user or a rate-limited window
+      // costs a fresh upstream call on every single request, which keeps the limit tripped.
+      return Response.json({ error: status }, { headers: { 'cache-control': `max-age=${FAIL_TTL}` } })
     }
   })
-  return res ? res.json() : null
+  return res ? res.json() : { error: 502 }
 }
 
 // Every public, non-fork repo on the profile. The unauthenticated endpoint returns public only.
@@ -77,7 +88,7 @@ const repos = async user =>
       stars: x.stargazers_count,
       repoUrl: x.html_url,
       site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
-    })))) || []
+    }))))
 
 // Only login, name and location. Deliberately not exposing bio/company/email.
 const profile = user =>
@@ -151,11 +162,15 @@ async function roundAvatar(user) {
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
 async function feed(env, ctx, user, host) {
-  const [who, list] = await Promise.all([profile(user), listFor(env, user, host)])
+  const [who, listed] = await Promise.all([profile(user), listFor(env, user, host)])
+  const err = who.error || listed.error
+  // 404 means no such account; anything else is our problem, not the visitor's.
+  if (err) return { error: err === 404 ? 404 : 503 }
+  const list = listed.data
   // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
   // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
   // control by creating a repo with an arbitrary homepage.
-  if (!isOwner(env, user)) return { profile: who, big: [], small: list }
+  if (!isOwner(env, user)) return { profile: who.data, big: [], small: list }
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
@@ -170,7 +185,7 @@ async function feed(env, ctx, user, host) {
     return false
   }))
   return {
-    profile: who,
+    profile: who.data,
     big: list.filter((_, i) => state[i]),
     small: list.filter((_, i) => !state[i]),
   }
@@ -190,9 +205,9 @@ export default {
 
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
-      return Response.json(await feed(env, ctx, user, url.host), {
-        headers: { 'cache-control': `max-age=${LIVE_TTL}` },
-      })
+      const data = await feed(env, ctx, user, url.host)
+      if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
+      return Response.json(data, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
     }
 
     // Icons come from the profile picture, so they follow the avatar with nothing to commit.
@@ -209,7 +224,7 @@ export default {
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
-      const r = (await listFor(env, user, url.host)).find(x => x.name === name)
+      const r = ((await listFor(env, user, url.host)).data || []).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }

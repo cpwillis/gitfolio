@@ -161,11 +161,8 @@ footer a:hover{color:var(--accent)}
   const q = asked ? '?user=' + encodeURIComponent(asked) : ''
   try {
     const res = await fetch('/api/repos' + q)
-    if (!res.ok) throw new Error(res.status)
+    if (!res.ok) throw new Error(res.status)   // 404 means no such account, anything else is us
     const { profile, big, small } = await res.json()
-    // a real but unknown username answers 200 with a null profile; without this the page would
-    // sit blank under the owner's fallback headline and explain nothing
-    if (asked && !profile) throw new Error('no such user')
     // markup carries plausible defaults so the headline never flashes; this corrects drift,
     // and is what makes a fork work without editing the HTML at all
     if (profile?.name) {
@@ -186,9 +183,9 @@ footer a:hover{color:var(--accent)}
     if (small.length) {
       const g = el('div', 'grid'); small.forEach((r, i) => g.append(card(r, false, i + 1))); host.append(g)
     }
-  } catch {
+  } catch (e) {
     host.textContent = ''
-    host.append(el('p', 'feed', asked
+    host.append(el('p', 'feed', String(e.message) === '404' && asked
       ? 'No public GitHub profile found for "' + asked + '".'
       : 'Could not reach the GitHub feed just now.'))
   }
