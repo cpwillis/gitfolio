@@ -6,8 +6,9 @@
   // the only thing a fork needs to change
   "vars": {
     "GITHUB_USER": "cpwillis",
-    // optional: extra repo names to leave out, comma separated
-    "HIDE_REPOS": "gitfolio",
+    // optional: extra repo names to leave out, comma separated. A repo whose homepage is the site
+    // you are looking at is hidden automatically, so this is only for the cases that cannot cover.
+    "HIDE_REPOS": "",
     // hosts allowed to serve /<username> for anyone. Leave empty for a personal deployment: the
     // site then only ever serves GITHUB_USER, whatever path is requested.
     "MULTI_USER_HOSTS": "gitfolio.cpwillis.dev,gitfolio.online"

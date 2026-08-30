@@ -206,6 +206,11 @@ export default {
     // ?user= names whose portfolio to serve; falls back to the deployment's own account.
     // GitHub usernames are case-insensitive, so normalise before anything caches on them.
     // Otherwise /CpWiLlIs is a distinct cache key and re-captures every screenshot.
+    // Which host the visitor actually typed. Behind the cpwillis.dev mirror that is not url.hostname,
+    // and without it a site cannot recognise a card pointing back at itself.
+    // Display filtering only: never used for gating, so spoofing it just hides a card from yourself.
+    const seenHost = req.headers.get('x-forwarded-host') || url.hostname
+    // multiUser deliberately reads the REAL hostname: a header must never unlock other accounts.
     const asked = multiUser(env, url.hostname) ? url.searchParams.get('user') : null
     const user = String(asked || env.GITHUB_USER || '').toLowerCase()
     if (!user) return new Response('set GITHUB_USER in wrangler.jsonc', { status: 500 })
@@ -213,7 +218,7 @@ export default {
 
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
-      const data = await feed(env, ctx, user, url.hostname)
+      const data = await feed(env, ctx, user, seenHost)
       if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
       return Response.json(data, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
     }
@@ -232,7 +237,7 @@ export default {
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
-      const r = ((await listFor(env, user, url.hostname)).data || []).find(x => x.name === name)
+      const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }

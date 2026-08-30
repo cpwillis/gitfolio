@@ -14,7 +14,7 @@ in `wrangler.jsonc`:
 ```jsonc
 "vars": {
   "GITHUB_USER": "your-username",
-  "HIDE_REPOS": "gitfolio",
+  "HIDE_REPOS": "",
   // leave empty: your deployment then only ever serves GITHUB_USER
   "MULTI_USER_HOSTS": ""
 }
@@ -68,9 +68,14 @@ A repo earns a large card once its site answers **and** its screenshot is cached
 captured in the background, so a repo promotes itself on a later view and demotes itself if the
 site goes down.
 
-Your profile README and the portfolio repo itself are hidden without configuring anything: GitHub
-names the first after your account, and the second's homepage matches the host you are on. That
-host rule cannot fire on `*.workers.dev`, which is what `HIDE_REPOS` is for.
+Two things are hidden without configuring anything: your profile README, which GitHub names after
+your account, and whichever repo is the site you are currently looking at, matched by its homepage
+against the host in the address bar. A site therefore never shows a card pointing at itself, while
+still showing your other deployments. That host rule cannot fire on `*.workers.dev`, which is what
+`HIDE_REPOS` is for.
+
+If you put this behind a proxy or a second domain, forward the visitor's hostname as
+`x-forwarded-host` so the self-check sees the address the visitor actually typed.
 
 ## Cost
 
