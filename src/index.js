@@ -128,14 +128,6 @@ async function capture(user, name, url, env) {
   })
 }
 
-const b64 = buf => {
-  const bytes = new Uint8Array(buf)
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    out += String.fromCharCode(...bytes.subarray(i, i + 0x8000))  // chunked: spreading it all blows the stack
-  }
-  return btoa(out)
-}
 
 // The avatar is square; clip it to a circle and inline it so the SVG has no external reference.
 async function roundAvatar(user) {
@@ -145,7 +137,7 @@ async function roundAvatar(user) {
       if (!r.ok) throw new Error(r.status)
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
         `<clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath>` +
-        `<image href="data:image/png;base64,${b64(await r.arrayBuffer())}" ` +
+        `<image href="data:image/png;base64,${new Uint8Array(await r.arrayBuffer()).toBase64()}" ` +
         `width="100" height="100" clip-path="url(#c)"/></svg>`
       return new Response(svg, {
         headers: { 'content-type': 'image/svg+xml', 'cache-control': `max-age=${SHOT_TTL}` },
