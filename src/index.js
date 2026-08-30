@@ -1,4 +1,4 @@
-const CACHE_V = 5          // bump whenever a cached payload's shape or filtering changes
+const CACHE_V = 6          // bump whenever a cached payload's shape or filtering changes
 const REPOS_TTL = 3600
 const LIVE_TTL = 900
 const SHOT_TTL = 86400
@@ -108,10 +108,20 @@ const shotKey = (user, name) => `${user}/shot/${name}`
 async function capture(user, name, url, env) {
   return cached(shotKey(user, name), async () => {
     try {
-      const r = await env.BROWSER.quickAction('screenshot', { url, viewport: { width: 1200, height: 750 } })
+      // 1200 wide so the captured site renders its desktop layout, but lossy: the card paints it
+      // about 325px wide and a lossless PNG of a screenshot is far larger than it needs to be.
+      // quality is rejected alongside the default png type, so both must be set together.
+      const r = await env.BROWSER.quickAction('screenshot', {
+        url,
+        viewport: { width: 1200, height: 750 },
+        screenshotOptions: { type: 'webp', quality: 80 },
+      })
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
       return new Response(r.body, {
-        headers: { 'content-type': 'image/png', 'cache-control': `max-age=${SHOT_TTL}` },
+        headers: {
+          'content-type': r.headers.get('content-type') || 'image/webp',
+          'cache-control': `max-age=${SHOT_TTL}`,
+        },
       })
     } catch (e) {
       console.error(`screenshot failed for ${name} (${url}):`, e.message)
