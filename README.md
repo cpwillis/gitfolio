@@ -14,7 +14,9 @@ in `wrangler.jsonc`:
 ```jsonc
 "vars": {
   "GITHUB_USER": "your-username",
-  "HIDE_REPOS": "gitfolio"
+  "HIDE_REPOS": "gitfolio",
+  // leave empty: your deployment then only ever serves GITHUB_USER
+  "MULTI_USER_HOSTS": ""
 }
 ```
 
