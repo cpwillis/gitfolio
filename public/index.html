@@ -87,8 +87,11 @@ footer a:hover{color:var(--accent)}
     try { name = decodeURIComponent(u) } catch {}
     document.getElementById('nm').textContent = name
     document.title = name + (/s$/i.test(name) ? "'" : "'s") + ' GitFolio'
-    // no basis for calling a stranger a software engineer
-    document.getElementById('role').textContent = ''
+    // no basis for calling a stranger a software engineer; stash it in case this deployment
+    // turns out to be single-user and falls back to its own account
+    const role = document.getElementById('role')
+    role.dataset.own = role.textContent
+    role.textContent = ''
   }
 }
 </script>
@@ -182,8 +185,14 @@ footer a:hover{color:var(--accent)}
       document.getElementById('nm').textContent = profile.name
       document.title = possessive(profile.name) + ' GitFolio'
     }
+    // On a single-user deployment the Worker ignores the requested username, so the path may name
+    // somebody this site will never serve. Correct the URL and the header rather than pretending.
+    if (asked && profile && profile.login.toLowerCase() !== asked.toLowerCase()) {
+      history.replaceState({}, '', '/')
+      asked = ''
+    }
     const role = document.getElementById('role')
-    if (!owner) role.textContent = ''
+    role.textContent = owner ? (role.dataset.own ?? role.textContent) : ''
     if (profile?.location) {
       document.getElementById('loc').textContent = (role.textContent ? ' in ' : '') + profile.location
     }

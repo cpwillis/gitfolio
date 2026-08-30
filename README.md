@@ -48,7 +48,7 @@ silently. Check `npx wrangler@4 deploy --dry-run` lists `env.BROWSER` if preview
 | URL | Shows |
 | --- | --- |
 | `/` | the account in `GITHUB_USER` |
-| `/<username>` | that GitHub user, as small cards (previews are owner-only) |
+| `/<username>` | that GitHub user, but only on a host listed in `MULTI_USER_HOSTS`. Otherwise every path serves `GITHUB_USER` |
 | `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `paper`. Anything else is the default |
 
 Combine them: `/torvalds?theme=space`. Themes are five CSS custom properties in

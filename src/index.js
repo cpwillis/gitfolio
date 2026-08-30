@@ -35,7 +35,13 @@ const isSelf = (r, user, host, extra) => {
 }
 // HIDE_REPOS is the escape hatch for when the host rule cannot fire, eg a *.workers.dev
 // preview domain where the portfolio repo's homepage does not match the host you are on.
-const hideList = env => String(env.HIDE_REPOS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)
+const csv = v => String(v || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)
+const hideList = env => csv(env.HIDE_REPOS)
+
+// Serving other people's profiles is opt-in per hostname. A fork inherits this config pointing at
+// somebody else's domains, so it never matches and the deployment only ever serves its own
+// account: nobody can drive a stranger's Worker by asking it for arbitrary usernames.
+const multiUser = (env, host) => csv(env.MULTI_USER_HOSTS).includes(bareHost(host))
 const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, user, host, extra))
 
 // Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
@@ -200,14 +206,14 @@ export default {
     // ?user= names whose portfolio to serve; falls back to the deployment's own account.
     // GitHub usernames are case-insensitive, so normalise before anything caches on them.
     // Otherwise /CpWiLlIs is a distinct cache key and re-captures every screenshot.
-    const asked = url.searchParams.get('user')
+    const asked = multiUser(env, url.hostname) ? url.searchParams.get('user') : null
     const user = String(asked || env.GITHUB_USER || '').toLowerCase()
     if (!user) return new Response('set GITHUB_USER in wrangler.jsonc', { status: 500 })
     if (!validUser(user)) return new Response('bad username', { status: 400 })
 
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
-      const data = await feed(env, ctx, user, url.host)
+      const data = await feed(env, ctx, user, url.hostname)
       if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
       return Response.json(data, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
     }
@@ -226,7 +232,7 @@ export default {
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
-      const r = ((await listFor(env, user, url.host)).data || []).find(x => x.name === name)
+      const r = ((await listFor(env, user, url.hostname)).data || []).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }

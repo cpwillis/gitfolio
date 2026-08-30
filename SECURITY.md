@@ -15,7 +15,11 @@ GitHub data and serves a static page, so the realistic risks are narrow:
 - **Untrusted content.** Repo names and descriptions are third-party strings rendered on the page.
   They are inserted with `textContent`, never `innerHTML`, so they cannot inject markup. Any change
   reintroducing string-built HTML is a security bug.
-- **Screenshots.** Any GitHub user can be requested at `/<username>`, but screenshots are taken
+- **Multi-tenancy is opt-in.** `/<username>` only serves other people on a hostname listed in
+  `MULTI_USER_HOSTS`. A fork inherits this pointing at somebody else's domains, so it never matches
+  and that deployment answers only for its own `GITHUB_USER`. Adding your host is a deliberate
+  decision to accept strangers' traffic against your GitHub rate limit.
+- **Screenshots.** Where multi-user is enabled, any GitHub user can be requested, but screenshots are taken
   **only** for the account in `GITHUB_USER`. Everyone else renders as small cards. This matters
   because a repo `homepage` is attacker-controlled — anyone can create a public repo pointing
   anywhere — so capturing for arbitrary users would turn the Worker into a screenshot proxy and
