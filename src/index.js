@@ -179,7 +179,8 @@ async function feed(env, ctx, user, host) {
     // that always fails would queue a fresh ~2s browser job on every request, forever.
     const pending = `${user}/pending/${r.name}`
     if (!(await cache.match(key(pending)))) {
-      ctx.waitUntil(cache.put(key(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } })))
+      // claim the slot before returning, so concurrent cold requests do not each queue a capture
+      await cache.put(key(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
       ctx.waitUntil(capture(user, r.name, r.site, env))
     }
     return false
