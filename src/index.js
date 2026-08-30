@@ -39,6 +39,10 @@ const isSelf = (r, user, host, extra) => {
 const hideList = env => String(env.HIDE_REPOS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)
 const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, user, host, extra))
 
+// Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
+// this list not containing the name, so the two must never drift apart.
+const listFor = async (env, user, host) => visible(await repos(user), user, host, hideList(env))
+
 async function cached(k, build) {
   const cache = caches.default
   const hit = await cache.match(key(k))
@@ -157,9 +161,7 @@ async function roundAvatar(user) {
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
 async function feed(env, ctx, user, host) {
-  const hide = hideList(env)
-  const [who, all] = await Promise.all([profile(user), repos(user)])
-  const list = visible(all, user, host, hide)
+  const [who, list] = await Promise.all([profile(user), listFor(env, user, host)])
   // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
   // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
   // control by creating a repo with an arbitrary homepage.
@@ -217,7 +219,7 @@ export default {
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = decodeURIComponent(m[1])
-      const r = visible(await repos(user), user, url.host, hideList(env)).find(x => x.name === name)
+      const r = (await listFor(env, user, url.host)).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
