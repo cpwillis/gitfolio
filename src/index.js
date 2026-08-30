@@ -43,7 +43,7 @@ const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, us
 const listFor = async (env, user, host) => {
   const all = await repos(user)
   if (all.error) return all
-  return { data: visible(all.data, user, host, hideList(env)) }
+  return { data: visible(all.data, user, host, isOwner(env, user) ? hideList(env) : []) }
 }
 
 async function cached(k, build) {
