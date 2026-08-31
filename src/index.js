@@ -6,6 +6,11 @@ const PENDING_TTL = 300   // back-off before retrying a capture that failed
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
 
+// Text from the API is rendered as-is, so collapse the whitespace nobody meant to type. A name
+// with a trailing space renders "Name 's GitFolio", and the possessive test misses a final s
+// because it sees the space instead of the letter.
+const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim()
+
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
 // Cloudflare partitions the newer Workers Cache by version, but NOT caches.default, so a deploy
@@ -108,7 +113,7 @@ const repos = async (user, token) =>
   (await ghCached(`${user}/repos`, `/users/${user}/repos?per_page=100&sort=updated`, list =>
     list.filter(x => !x.fork && !x.private).map(x => ({
       name: x.name,
-      desc: x.description || '',
+      desc: clean(x.description),
       lang: x.language,
       stars: x.stargazers_count,
       repoUrl: x.html_url,
@@ -121,8 +126,8 @@ const repos = async (user, token) =>
 const profile = (user, token) =>
   ghCached(`${user}/profile`, `/users/${user}`, u => ({
     login: u.login,
-    name: u.name || u.login,
-    location: u.location || '',
+    name: clean(u.name) || u.login,
+    location: clean(u.location),
     type: u.type || 'User',
     publicRepos: u.public_repos || 0,
     followers: u.followers || 0,
