@@ -7,8 +7,6 @@
   // zone route does NOT create DNS, which is the reason a route alone leaves the host unresolvable.
   "routes": [
     { "pattern": "gitfolio.cpwillis.dev", "custom_domain": true }
-    // gitfolio.online cannot go here until the domain is added to this Cloudflare account and its
-    // nameservers point at Cloudflare. Listing a zone the account does not hold fails the deploy.
   ],
   // the only thing a fork needs to change
   "vars": {
@@ -20,7 +18,7 @@
     "HIDE_REPOS": "website",
     // hosts allowed to serve /<username> for anyone. Leave empty for a personal deployment: the
     // site then only ever serves GITHUB_USER, whatever path is requested.
-    "MULTI_USER_HOSTS": "gitfolio.cpwillis.dev,gitfolio.online"
+    "MULTI_USER_HOSTS": "gitfolio.cpwillis.dev"
   },
   "observability": {
     "enabled": true
