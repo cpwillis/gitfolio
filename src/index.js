@@ -366,11 +366,29 @@ export default {
     // The shell ships max-age=0, must-revalidate with no validator, so every repeat view is a
     // round trip that can only ever return the same bytes. Five minutes of browser cache makes a
     // second view free; the feed and the previews carry their own, shorter, freshness.
-    const page = async (path = '/') => {
+    const page = async (path = '/', who = '') => {
       const r = await env.ASSETS.fetch(new Request(new URL(path, url), req))
       const h = new Headers(r.headers)
       h.set('cache-control', 'public, max-age=300')
-      return new Response(r.body, { status: r.status, headers: h })
+      const res = new Response(r.body, { status: r.status, headers: h })
+      if (!who) return res
+      // Crawlers and link unfurlers do not run the page's JavaScript, so without this every shared
+      // link is titled for whoever the deployment ships pointing at. who is already through
+      // validUser, so it is [A-Za-z0-9-]{1,39} and safe to interpolate into an attribute.
+      const t = `${who}${/s$/i.test(who) ? "'" : "'s"} GitFolio`
+      // the request host, never x-forwarded-host: a proxy must not be able to pick our canonical
+      const canon = `https://${url.host}${multiUser(env, url.hostname) ? '/' + who : '/'}`
+      return new HTMLRewriter()
+        .on('title', { element: e => e.setInnerContent(t) })
+        .on('head', { element: e => e.append(
+          `<link rel="canonical" href="${canon}">` +
+          `<meta property="og:type" content="profile">` +
+          `<meta property="og:title" content="${t}">` +
+          `<meta property="og:description" content="Public GitHub projects by ${who}.">` +
+          `<meta property="og:url" content="${canon}">` +
+          `<meta property="og:image" content="https://github.com/${who}.png?size=460">` +
+          `<meta name="twitter:card" content="summary">`, { html: true }) })
+        .transform(res)
     }
     const segs = url.pathname.split('/').filter(Boolean)
 
@@ -389,7 +407,7 @@ export default {
     if (segs.length === 0) {
       // On a multi-user host, "/" is nobody's portfolio: it explains what this is and how to use
       // it. A single-user deployment keeps "/" as its own profile, the whole point of a fork.
-      if (!multiUser(env, url.hostname)) return page()
+      if (!multiUser(env, url.hostname)) return page('/', user)
       const typed = String(url.searchParams.get('u') || '').toLowerCase()   // no-JS form fallback
       if (validUser(typed)) return Response.redirect(new URL(`/${typed}`, url).toString(), 302)
       return page('/landing')
@@ -398,6 +416,6 @@ export default {
     // A username is exactly one segment and must look like a username. Everything the Worker
     // genuinely serves has already returned above, so anything left is not a URL here.
     if (segs.length > 1 || !validUser(segs[0].toLowerCase())) return notFound()
-    return page()
+    return page('/', segs[0].toLowerCase())
   },
 }
