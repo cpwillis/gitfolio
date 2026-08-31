@@ -357,7 +357,10 @@ async function accentFromAvatar(q) {
     document.getElementById('nml').removeAttribute('href')   // no profile, so nothing to link to
     const code = String(e.message)
     const why = code === '404' && asked
-      ? 'No public GitHub profile found for "' + asked + '".'
+      // the Worker cannot know an account is missing without asking GitHub, so this is the first
+      // point anything does. Tell crawlers, which is what turns a soft 404 into a real one.
+      ? (document.head.insertAdjacentHTML('beforeend', '<meta name="robots" content="noindex">'),
+         'No public GitHub profile found for "' + asked + '".')
       : code === '429'
         ? 'GitHub is rate limiting this site at the moment, so the project list could not be loaded. It should come back shortly.'
         : 'Could not reach the GitHub feed just now.'
