@@ -24,6 +24,7 @@ const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 // the profile README (always named after the account) and the portfolio itself (its homepage
 // is the host you are reading this on).
 // GitHub usernames: alphanumeric and single hyphens, 39 max. Anything else is not a user.
+const RESERVED = new Set(['api', 'shot'])
 const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/
 const validUser = u => typeof u === 'string' && USER_RE.test(u)
 
@@ -307,15 +308,36 @@ export default {
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
-    // On a multi-user host, "/" is nobody's portfolio: it explains what this is and how to use it.
-    // A single-user deployment keeps "/" as its own profile, which is the whole point of a fork.
-    if (url.pathname === '/' && multiUser(env, url.hostname)) {
+    // Routing is explicit from here. Relying on the asset router's single-page-application
+    // fallback meant every typo, every reserved prefix and every extra path segment answered 200
+    // with the profile page, so a URL that does not exist looked like one that does.
+    const page = () => env.ASSETS.fetch(new Request(new URL('/', url), req))
+    const segs = url.pathname.split('/').filter(Boolean)
+
+    // the landing page is reached at "/", not by its file name
+    if (segs.length === 1 && (segs[0] === 'landing' || segs[0] === 'landing.html')) {
+      return Response.redirect(new URL('/', url).toString(), 302)
+    }
+    // These are route prefixes, not people. "api" and "shot" are valid username shapes, so without
+    // this /api would render a portfolio for a user named api.
+    if (segs.length === 1 && RESERVED.has(segs[0].toLowerCase())) {
+      return new Response(null, { status: 404 })
+    }
+
+    if (segs.length === 0) {
+      // On a multi-user host, "/" is nobody's portfolio: it explains what this is and how to use
+      // it. A single-user deployment keeps "/" as its own profile, the whole point of a fork.
+      if (!multiUser(env, url.hostname)) return page()
       const typed = String(url.searchParams.get('u') || '').toLowerCase()   // no-JS form fallback
       if (validUser(typed)) return Response.redirect(new URL(`/${typed}`, url).toString(), 302)
-      // '/landing', not '/landing.html': the asset router redirects the extension away
       return env.ASSETS.fetch(new Request(new URL('/landing', url), req))
     }
 
-    return env.ASSETS.fetch(req)
+    // A username is exactly one segment and must look like a username. Everything the Worker
+    // genuinely serves has already returned above, so anything left is not a URL here.
+    if (segs.length > 1 || !validUser(segs[0].toLowerCase())) {
+      return new Response(null, { status: 404 })
+    }
+    return page()
   },
 }
