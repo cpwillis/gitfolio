@@ -112,6 +112,24 @@ A classic token with **no scopes** is enough: everything here reads public data 
 `wrangler secret`, never a `var`, and never commit it. Without a token everything still works, it is
 just fragile.
 
+## Abuse
+
+Three ceilings, all in code so a fork inherits them:
+
+- **Per-IP rate limits** via the Workers rate-limiting bindings: 30 requests a minute to
+  `/api/repos`, 120 a minute to the pages. A missing binding means "allow", so a fork that has not
+  created them still works, it just has no ceiling.
+- **A daily screenshot budget** (`CAPTURE_BUDGET`, 200/day). Captures are the only metered thing
+  here, and this sits under the browser-minute quota so a crawler cannot flatten a day of it. The
+  count uses the Cache API, which is not atomic, so it is deliberately approximate.
+- **`robots.txt`** keeps crawlers out of `/api/` and `/shot/`, which exist for this site's own pages.
+
+Screenshots are already owner-only, so a visitor cannot aim a capture at a URL they control.
+
+Anything beyond this belongs in front of the Worker rather than in it: Cloudflare WAF rules, or
+Bot Management if the account has it. `request.cf.botManagement` is not available on the Free plan,
+so there is deliberately no bot-score check in this code.
+
 ## Caching
 
 Repo and profile data is keyed by the deployed Worker version, so **every deploy starts from a cold

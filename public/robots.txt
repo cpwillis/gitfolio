@@ -1,0 +1,6 @@
+# The API and the screenshot endpoints exist for this site's own pages, not for crawling.
+User-agent: *
+Disallow: /api/
+Disallow: /shot/
+
+Sitemap: https://gitfolio.cpwillis.dev/sitemap.xml

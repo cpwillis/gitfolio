@@ -5,10 +5,13 @@ const SHOT_TTL = 86400
 const PENDING_TTL = 300   // back-off before retrying a capture that failed
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
+const CAPTURE_BUDGET = 200   // screenshots per day, a backstop under the browser-minute quota
+const DAY = 86400
 
 // Text from the API is rendered as-is, so collapse the whitespace nobody meant to type. A name
 // with a trailing space renders "Name 's GitFolio", and the possessive test misses a final s
 // because it sees the space instead of the letter.
+const today = () => new Date().toISOString().slice(0, 10)
 const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim()
 
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
@@ -30,6 +33,29 @@ const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 // is the host you are reading this on).
 // GitHub usernames: alphanumeric and single hyphens, 39 max. Anything else is not a user.
 const RESERVED = new Set(['api', 'shot'])
+const STATIC = new Set(['/robots.txt', '/sitemap.xml'])
+
+// Rate limiters are keyed on the client IP. Absent bindings mean "allow": a fork that has not
+// created them still works, it just has no ceiling.
+const under = async (limiter, ip) => {
+  if (!limiter) return true
+  try { return (await limiter.limit({ key: ip })).success } catch { return true }
+}
+const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after': '60' } })
+
+// Captures are the only thing here that spends a metered resource, so they get a hard daily
+// ceiling on top of the per-repo back-off. Cache API is not atomic, so this is approximate by
+// design: it exists to stop a crawler flattening the day's quota, not to count precisely.
+async function captureBudgetLeft(day) {
+  const k = key(`budget/${day}`)
+  const hit = await caches.default.match(k)
+  const used = hit ? Number(await hit.text()) || 0 : 0
+  if (used >= CAPTURE_BUDGET) return false
+  await caches.default.put(k, new Response(String(used + 1), {
+    headers: { 'cache-control': `max-age=${DAY}` },
+  }))
+  return true
+}
 const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/
 const validUser = u => typeof u === 'string' && USER_RE.test(u)
 
@@ -252,7 +278,7 @@ async function buildFeed(env, ctx, user, host) {
     if (!(await cache.match(key(pending)))) {
       // claim the slot before returning, so concurrent cold requests do not each queue a capture
       await cache.put(key(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
-      ctx.waitUntil(capture(user, r.name, r.site, env))
+      if (await captureBudgetLeft(today())) ctx.waitUntil(capture(user, r.name, r.site, env))
     }
     return false
   }))
@@ -283,8 +309,11 @@ export default {
     if (!user) return new Response('set GITHUB_USER in wrangler.jsonc', { status: 500 })
     if (!validUser(user)) return new Response('bad username', { status: 400 })
 
+    const ip = req.headers.get('cf-connecting-ip') || '0.0.0.0'
+
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
+      if (!(await under(env.RL_FEED, ip))) return tooMany()
       const data = await feed(env, ctx, user, seenHost)
       if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
       return Response.json(data, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
@@ -313,11 +342,17 @@ export default {
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
+    if (!(await under(env.RL_PAGE, ip))) return tooMany()
+
     // Routing is explicit from here. Relying on the asset router's single-page-application
     // fallback meant every typo, every reserved prefix and every extra path segment answered 200
     // with the profile page, so a URL that does not exist looked like one that does.
     const page = () => env.ASSETS.fetch(new Request(new URL('/', url), req))
     const segs = url.pathname.split('/').filter(Boolean)
+
+    // Real files that are not pages. Explicit, because the username rule below rejects anything
+    // with a dot in it and would otherwise 404 them.
+    if (STATIC.has(url.pathname)) return env.ASSETS.fetch(req)
 
     // the landing page is reached at "/", not by its file name
     if (segs.length === 1 && (segs[0] === 'landing' || segs[0] === 'landing.html')) {
