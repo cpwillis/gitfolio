@@ -68,7 +68,8 @@ every path will serve `GITHUB_USER` instead. Add the hostname you are actually o
 | `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `mono`, `forest`, `sunset`, `nord`, `slate`, `paper`. Omit it and the accent is derived from the profile picture |
 
 Combine them: `/torvalds?theme=space`. Themes are five CSS custom properties in
-`public/index.html`; copy a block and change the values to add one.
+`public/index.html`; copy a block and change the values to add one. Only the accent and the two
+glow colours move, so no avatar can make the page unreadable.
 
 ## How it works
 
@@ -106,12 +107,6 @@ npx wrangler@4 secret put GITHUB_TOKEN
 A classic token with **no scopes** is enough: everything here reads public data only. Use
 `wrangler secret`, never a `var`, and never commit it. Without a token everything still works, it is
 just fragile.
-
-## Themes
-
-Nine palettes via `?theme=`, listed above. With none set, the accent is derived from the profile
-picture. Only the accent and the two glow colours move, so no avatar can make the page unreadable,
-and a greyscale one keeps the default.
 
 ## Abuse
 
