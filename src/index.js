@@ -1,20 +1,18 @@
-const CACHE_V = 10        // only for image payloads: bump if their format changes
+const CACHE_V = 10        // image payloads and capture-cost bookkeeping: survives a deploy
 const REPOS_TTL = 3600
 const LIVE_TTL = 3600     // a dead site demotes within the hour; every check is an outbound call
 const SHOT_TTL = 86400
-const PENDING_TTL = 300   // back-off before retrying a capture that failed
+const PENDING_TTL = 3600  // back-off before retrying a capture that failed
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
 const CAPTURE_BUDGET = 200   // screenshots per day, a backstop under the browser-minute quota
 const DAY = 86400
 
+const today = () => new Date().toISOString().slice(0, 10)
 // Text from the API is rendered as-is, so collapse the whitespace nobody meant to type. A name
 // with a trailing space renders "Name 's GitFolio", and the possessive test misses a final s
 // because it sees the space instead of the letter.
-const today = () => new Date().toISOString().slice(0, 10)
 const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim()
-
-const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
 // Cloudflare partitions the newer Workers Cache by version, but NOT caches.default, so a deploy
 // has to invalidate the data cache itself. Written once per isolate; a version cannot change
@@ -43,7 +41,8 @@ const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after'
 // ceiling on top of the per-repo back-off. Cache API is not atomic, so this is approximate by
 // design: it exists to stop a crawler flattening the day's quota, not to count precisely.
 async function captureBudgetLeft(day) {
-  const k = key(`budget/${day}`)
+  // imgKey, not key: a deploy must not hand the account a fresh day's capture quota
+  const k = imgKey(`budget/${day}`)
   const hit = await caches.default.match(k)
   const used = hit ? Number(await hit.text()) || 0 : 0
   if (used >= CAPTURE_BUDGET) return false
@@ -59,11 +58,16 @@ const validUser = u => typeof u === 'string' && USER_RE.test(u)
 // A repo homepage is attacker-controllable once any username can be requested, so refuse
 // anything that is not a public http(s) host before it reaches fetch or the browser.
 const PRIVATE = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[|.*\.internal$|.*\.local$)/i
-const safeSite = u => {
+// Returns the usable URL or null. GitHub records homepages bare ("example.com") as often as not,
+// so normalising and validating are one step: a homepage is either safe to use or it is not.
+const siteOrNull = u => {
+  const s = !u ? '' : /^https?:\/\//.test(u) ? u : `https://${u}`
   try {
-    const { protocol, hostname } = new URL(u)
+    const { protocol, hostname } = new URL(s)
     return (protocol === 'https:' || protocol === 'http:') && hostname.includes('.') && !PRIVATE.test(hostname)
-  } catch { return false }
+      ? s     // the original string, not url.href: href adds a trailing slash and re-keys every live/ entry
+      : null
+  } catch { return null }
 }
 
 const bareHost = h => String(h || '').replace(/^www\./, '').toLowerCase()
@@ -143,7 +147,7 @@ const repos = async (user, token) =>
       lang: x.language,
       stars: x.stargazers_count,
       repoUrl: x.html_url,
-      site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
+      site: siteOrNull(x.homepage),
     })), token))
 
 // Public profile fields only. bio, company and email are never forwarded.
@@ -241,13 +245,13 @@ const tally = (list, who) => ({
 // from is cached individually too, but that still meant a profile read, a repo read and one
 // liveness read per repo on every single view.
 async function feed(env, ctx, user, host) {
-  const hit = await caches.default.match(key(`feed/${user}/${bareHost(host)}`))
+  const k = key(`feed/${user}/${bareHost(host)}`)
+  const hit = await caches.default.match(k)
   if (hit) return hit.json()
   const data = await buildFeed(env, ctx, user, host)
   // never cache an error: it must be retryable as soon as the underlying read recovers
   if (!data.error) {
-    await caches.default.put(key(`feed/${user}/${bareHost(host)}`),
-      Response.json(data, { headers: { 'cache-control': `max-age=${FEED_TTL}` } }))
+    await caches.default.put(k, Response.json(data, { headers: { 'cache-control': `max-age=${FEED_TTL}` } }))
   }
   return data
 }
@@ -273,9 +277,9 @@ async function buildFeed(env, ctx, user, host) {
     // capture() returns null on failure and nulls are never cached, so without this marker a repo
     // that always fails would queue a fresh ~2s browser job on every request, forever.
     const pending = `${user}/pending/${r.name}`
-    if (!(await cache.match(key(pending)))) {
+    if (!(await cache.match(imgKey(pending)))) {
       // claim the slot before returning, so concurrent cold requests do not each queue a capture
-      await cache.put(key(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
+      await cache.put(imgKey(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
       if (await captureBudgetLeft(today())) ctx.waitUntil(capture(user, r.name, r.site, env))
     }
     return false
@@ -336,7 +340,7 @@ export default {
       const warm = await caches.default.match(imgKey(shotKey(user, name)))
       if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
-      if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
+      if (!r || !siteOrNull(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
@@ -345,7 +349,15 @@ export default {
     // Routing is explicit from here. Relying on the asset router's single-page-application
     // fallback meant every typo, every reserved prefix and every extra path segment answered 200
     // with the profile page, so a URL that does not exist looked like one that does.
-    const page = () => env.ASSETS.fetch(new Request(new URL('/', url), req))
+    // The shell ships max-age=0, must-revalidate with no validator, so every repeat view is a
+    // round trip that can only ever return the same bytes. Five minutes of browser cache makes a
+    // second view free; the feed and the previews carry their own, shorter, freshness.
+    const page = async () => {
+      const r = await env.ASSETS.fetch(new Request(new URL('/', url), req))
+      const h = new Headers(r.headers)
+      h.set('cache-control', 'public, max-age=300')
+      return new Response(r.body, { status: r.status, headers: h })
+    }
     const segs = url.pathname.split('/').filter(Boolean)
 
     // Real files that are not pages. Explicit, because the username rule below rejects anything
