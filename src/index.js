@@ -1,9 +1,10 @@
 const CACHE_V = 10        // only for image payloads: bump if their format changes
 const REPOS_TTL = 3600
-const LIVE_TTL = 900
+const LIVE_TTL = 3600     // a dead site demotes within the hour; every check is an outbound call
 const SHOT_TTL = 86400
 const PENDING_TTL = 300   // back-off before retrying a capture that failed
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
+const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
 
 const withScheme = u => (!u ? null : /^https?:\/\//.test(u) ? u : `https://${u}`)
 
@@ -184,11 +185,27 @@ async function roundAvatar(user) {
 // in the background, so a repo promotes itself on a later view.
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
+// The assembled answer is cached per user and host for a short window. Everything it is built
+// from is cached individually too, but that still meant a profile read, a repo read and one
+// liveness read per repo on every single view.
 async function feed(env, ctx, user, host) {
+  const hit = await caches.default.match(key(`feed/${user}/${bareHost(host)}`))
+  if (hit) return hit.json()
+  const data = await buildFeed(env, ctx, user, host)
+  // never cache an error: it must be retryable as soon as the underlying read recovers
+  if (!data.error) {
+    await caches.default.put(key(`feed/${user}/${bareHost(host)}`),
+      Response.json(data, { headers: { 'cache-control': `max-age=${FEED_TTL}` } }))
+  }
+  return data
+}
+
+async function buildFeed(env, ctx, user, host) {
   const [who, listed] = await Promise.all([profile(user, env.GITHUB_TOKEN), listFor(env, user, host)])
   const err = who.error || listed.error
-  // 404 means no such account; anything else is our problem, not the visitor's.
-  if (err) return { error: err === 404 ? 404 : 503 }
+  // 404 is no such account. 403/429 is GitHub throttling us, which is worth saying out loud
+  // rather than blaming the feed. Anything else is our problem.
+  if (err) return { error: err === 404 ? 404 : (err === 403 || err === 429 ? 429 : 503) }
   const list = listed.data
   // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
   // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
@@ -255,6 +272,10 @@ export default {
     if (m) {
       if (!isOwner(env, user)) return new Response(null, { status: 404 })
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
+      // The common case is a warm image. Serve it before deriving the repo list or touching the
+      // network: isOwner above is a string compare, so nothing expensive has happened yet.
+      const warm = await caches.default.match(imgKey(shotKey(user, name)))
+      if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
       if (!r || !safeSite(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })

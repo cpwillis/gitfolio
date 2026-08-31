@@ -82,7 +82,7 @@ footer a:hover{color:var(--accent)}
 <canvas class="fx fx-particles" id="fxp"></canvas>
 <main>
   <h1><span id="nm">cpwillis</span> makes things.</h1>
-  <p class="sub"><span id="role">Software engineer</span><span id="loc"></span>. <b id="tag">Open one. They are running right now.</b></p>
+  <p class="sub"><span id="role">Software engineer</span><span id="loc"></span><span id="stop">.</span> <b id="tag">Open one. They are running right now.</b></p>
 <script>
 // Runs during parse, before the header paints. The shipped markup names the deployment's own
 // account, which is right for "/" but wrong the moment the path names somebody else.
@@ -98,6 +98,7 @@ footer a:hover{color:var(--accent)}
     const role = document.getElementById('role')
     role.dataset.own = role.textContent
     role.textContent = ''
+    document.getElementById('stop').textContent = ''   // nothing before it yet
   }
 }
 </script>
@@ -199,9 +200,12 @@ footer a:hover{color:var(--accent)}
     }
     const role = document.getElementById('role')
     role.textContent = owner ? (role.dataset.own ?? role.textContent) : ''
+    const loc = document.getElementById('loc')
     if (profile?.location) {
-      document.getElementById('loc').textContent = (role.textContent ? ' in ' : '') + profile.location
+      loc.textContent = (role.textContent ? ' in ' : '') + profile.location
     }
+    // the full stop belongs to the sentence, so it only exists when there is a sentence
+    document.getElementById('stop').textContent = role.textContent || loc.textContent ? '.' : ''
     if (profile?.login) {
       const gh = document.getElementById('gh')
       gh.href = 'https://github.com/' + profile.login
@@ -232,9 +236,13 @@ footer a:hover{color:var(--accent)}
   } catch (e) {
     host.textContent = ''
     host.setAttribute('aria-busy', 'false')
-    host.append(el('p', 'feed', String(e.message) === '404' && asked
+    const code = String(e.message)
+    const why = code === '404' && asked
       ? 'No public GitHub profile found for "' + asked + '".'
-      : 'Could not reach the GitHub feed just now.'))
+      : code === '429'
+        ? 'GitHub is rate limiting this site at the moment, so the project list could not be loaded. It should come back shortly.'
+        : 'Could not reach the GitHub feed just now.'
+    host.append(el('p', 'feed', why))
   }
 })()
 </script>
