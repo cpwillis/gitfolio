@@ -58,6 +58,9 @@ section:first-of-type h2{margin-top:clamp(1.5rem,4vw,2rem)}
   animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.45}}
 @media(prefers-reduced-motion:reduce){.skel i{animation:none}}
+.stats{margin:.75rem 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:.35rem 1rem;
+  color:#9a9aa2;font-size:.82rem;font-variant-numeric:tabular-nums}
+.stats b{color:var(--fg);font-weight:600}
 .feed{margin:2.5rem 0 0;color:#9a9aa2;font-size:.78rem}
 .feed a{color:#9a9aa2;text-decoration:none;border-bottom:1px solid #26262b}
 .feed a:hover{color:var(--accent);border-bottom-color:var(--accent)}
@@ -102,6 +105,7 @@ footer a:hover{color:var(--accent)}
   }
 }
 </script>
+  <ul id="stats" class="stats" aria-label="Profile totals"></ul>
   <div id="projects" role="status" aria-busy="true"><div class="skel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
   <noscript><p class="feed">Project list needs JavaScript. Everything is at
     <a href="https://github.com/cpwillis" target="_blank" rel="noopener">github.com/cpwillis</a>.</p></noscript>
@@ -185,7 +189,7 @@ footer a:hover{color:var(--accent)}
   try {
     const res = await fetch('/api/repos' + q)
     if (!res.ok) throw new Error(res.status)   // 404 means no such account, anything else is us
-    const { profile, owner, big, small } = await res.json()
+    const { profile, stats, owner, big, small } = await res.json()
     // markup carries plausible defaults so the headline never flashes; this corrects drift,
     // and is what makes a fork work without editing the HTML at all
     if (profile?.name) {
@@ -199,7 +203,9 @@ footer a:hover{color:var(--accent)}
       asked = ''
     }
     const role = document.getElementById('role')
-    role.textContent = owner ? (role.dataset.own ?? role.textContent) : ''
+    // an organisation is not a software engineer, whoever's deployment this is
+    const isOrg = profile?.type === 'Organization'
+    role.textContent = owner && !isOrg ? (role.dataset.own ?? role.textContent) : ''
     const loc = document.getElementById('loc')
     if (profile?.location) {
       loc.textContent = (role.textContent ? ' in ' : '') + profile.location
@@ -225,6 +231,22 @@ footer a:hover{color:var(--accent)}
         const li = el('li'); li.append(card(r, big, big ? i : i + 1)); ul.append(li)
       })
       sec.append(h, ul); host.append(sec)
+    }
+    if (stats) {
+      const box = document.getElementById('stats')
+      const counts = [
+        [stats.repos, 'repository', 'repositories'],
+        [stats.stars, 'star', 'stars'],
+        [stats.languages, 'language', 'languages'],
+        [stats.followers, 'follower', 'followers'],
+      ]
+      for (const [n, one, many] of counts) {
+        if (!n) continue
+        const li = el('li')
+        li.append(el('b', null, n.toLocaleString()), document.createTextNode(' ' + (n === 1 ? one : many)))
+        box.append(li)
+      }
+      if (stats.since) box.append(el('li', null, 'on GitHub since ' + stats.since))
     }
     group('wall', 'Live projects', big, true)
     group('grid', big.length ? 'Other repositories' : 'Repositories', small, false)

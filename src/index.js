@@ -115,11 +115,16 @@ const repos = async (user, token) =>
     })), token))
 
 // Only login, name and location. Deliberately not exposing bio/company/email.
+// Public, non-identifying fields only. Still deliberately not exposing bio, company or email.
+// `type` is "User" or "Organization": the header must not call an organisation a software engineer.
 const profile = (user, token) =>
   ghCached(`${user}/profile`, `/users/${user}`, u => ({
     login: u.login,
     name: u.name || u.login,
     location: u.location || '',
+    type: u.type || 'User',
+    followers: u.followers || 0,
+    since: String(u.created_at || '').slice(0, 4),
   }), token)
 
 async function live(url) {
@@ -185,6 +190,18 @@ async function roundAvatar(user) {
 // in the background, so a repo promotes itself on a later view.
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
+// Derived from the repos already fetched, so this costs no extra API call. Counted over the
+// visible list so the numbers agree with the cards on screen.
+// Commit totals are deliberately absent: no endpoint used here carries one, and the only source
+// is an authenticated GraphQL call that covers just the last twelve months.
+const tally = (list, who) => ({
+  repos: list.length,
+  stars: list.reduce((n, r) => n + (r.stars || 0), 0),
+  languages: new Set(list.map(r => r.lang).filter(Boolean)).size,
+  followers: who?.followers || 0,
+  since: who?.since || '',
+})
+
 // The assembled answer is cached per user and host for a short window. Everything it is built
 // from is cached individually too, but that still meant a profile read, a repo read and one
 // liveness read per repo on every single view.
@@ -210,7 +227,9 @@ async function buildFeed(env, ctx, user, host) {
   // Screenshots are only taken for this deployment's own account. Anyone else's portfolio is
   // small cards, so a visitor cannot spend the account's browser quota or aim it at a URL they
   // control by creating a repo with an arbitrary homepage.
-  if (!isOwner(env, user)) return { profile: who.data, owner: false, big: [], small: list }
+  if (!isOwner(env, user)) {
+    return { profile: who.data, stats: tally(list, who.data), owner: false, big: [], small: list }
+  }
   const cache = caches.default
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
@@ -227,6 +246,7 @@ async function buildFeed(env, ctx, user, host) {
   }))
   return {
     profile: who.data,
+    stats: tally(list, who.data),
     owner: true,
     big: list.filter((_, i) => state[i]),
     small: list.filter((_, i) => !state[i]),
