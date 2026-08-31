@@ -371,17 +371,19 @@ export default {
       const h = new Headers(r.headers)
       h.set('cache-control', 'public, max-age=300')
       const res = new Response(r.body, { status: r.status, headers: h })
-      if (!who) return res
+      // Every page gets one, so ?theme= and any other query string consolidate onto the bare URL.
+      // The request host, never x-forwarded-host: a proxy must not be able to pick our canonical.
+      const canon = `https://${url.host}${who && multiUser(env, url.hostname) ? '/' + who : '/'}`
+      let rw = new HTMLRewriter()
+        .on('head', { element: e => e.append(`<link rel="canonical" href="${canon}">`, { html: true }) })
+      if (!who) return rw.transform(res)
       // Crawlers and link unfurlers do not run the page's JavaScript, so without this every shared
       // link is titled for whoever the deployment ships pointing at. who is already through
       // validUser, so it is [A-Za-z0-9-]{1,39} and safe to interpolate into an attribute.
       const t = `${who}${/s$/i.test(who) ? "'" : "'s"} GitFolio`
-      // the request host, never x-forwarded-host: a proxy must not be able to pick our canonical
-      const canon = `https://${url.host}${multiUser(env, url.hostname) ? '/' + who : '/'}`
-      return new HTMLRewriter()
+      return rw
         .on('title', { element: e => e.setInnerContent(t) })
         .on('head', { element: e => e.append(
-          `<link rel="canonical" href="${canon}">` +
           `<meta property="og:type" content="profile">` +
           `<meta property="og:title" content="${t}">` +
           `<meta property="og:description" content="Public GitHub projects by ${who}.">` +
