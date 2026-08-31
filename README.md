@@ -3,8 +3,15 @@
 A portfolio that builds itself from your GitHub profile. No build step, no content files.
 
 Repos with a working website get a large card showing a live screenshot of the running site.
-Everything else gets a small card linking to source. Name, location, descriptions, languages and
-stars all come from the GitHub API at request time.
+Everything else gets a small card linking to source. Name, location, descriptions, languages, stars
+and the profile totals all come from the GitHub API at request time.
+
+Organisations work the same way: `/<orgname>` renders an organisation's public repositories, and the
+header drops the "Software engineer" line, which is not a claim to make about an organisation.
+
+Commit totals are **not** shown. No endpoint used here carries one, and the only source is an
+authenticated GraphQL call covering just the last twelve months, so a figure labelled "commits"
+would be both an extra request and quietly wrong.
 
 ## Deploy
 
