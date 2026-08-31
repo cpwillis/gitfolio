@@ -15,7 +15,9 @@
     "GITHUB_USER": "cpwillis",
     // optional: extra repo names to leave out, comma separated. A repo whose homepage is the site
     // you are looking at is hidden automatically, so this is only for the cases that cannot cover.
-    "HIDE_REPOS": "",
+    // "website" is cpwillis.dev itself. Its homepage points at the durable gitfolio subdomain
+    // rather than at cpwillis.dev, so the host rule cannot recognise it as self on cpwillis.dev.
+    "HIDE_REPOS": "website",
     // hosts allowed to serve /<username> for anyone. Leave empty for a personal deployment: the
     // site then only ever serves GITHUB_USER, whatever path is requested.
     "MULTI_USER_HOSTS": "gitfolio.cpwillis.dev,gitfolio.online"
