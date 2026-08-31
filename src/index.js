@@ -29,7 +29,7 @@ const key = k => new Request(`https://x/${VERSION}/${k}`)
 const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 
 const RESERVED = new Set(['api', 'shot'])
-const STATIC = new Set(['/robots.txt', '/sitemap.xml'])
+const STATIC = new Set(['/robots.txt'])
 
 // Rate limiters are keyed on the client IP. Absent bindings mean "allow": a fork that has not
 // created them still works, it just has no ceiling.

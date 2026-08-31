@@ -1,7 +1,0 @@
-version: 2
-updates:
-  # No npm manifest by design; this only keeps any workflow actions current.
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: monthly
