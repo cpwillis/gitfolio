@@ -70,7 +70,7 @@ every path will serve `GITHUB_USER` instead. Add the hostname you are actually o
 | --- | --- |
 | `/` | on a host in `MULTI_USER_HOSTS`, a landing page explaining the project. Otherwise the account in `GITHUB_USER` |
 | `/<username>` | that GitHub user, but only on a host listed in `MULTI_USER_HOSTS`. Otherwise every path serves `GITHUB_USER` |
-| `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `paper`. Anything else is the default |
+| `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `mono`, `forest`, `sunset`, `nord`, `slate`, `paper`. Omit it and the accent is derived from the profile picture |
 
 Combine them: `/torvalds?theme=space`. Themes are five CSS custom properties in
 `public/index.html`; copy a block and change the values to add one.
@@ -111,6 +111,16 @@ npx wrangler@4 secret put GITHUB_TOKEN
 A classic token with **no scopes** is enough: everything here reads public data only. Use
 `wrangler secret`, never a `var`, and never commit it. Without a token everything still works, it is
 just fragile.
+
+## Themes
+
+Nine palettes via `?theme=`. Omit it and the accent is derived from the profile picture: the page
+samples the avatar the favicon route already inlines, takes a saturation-weighted circular mean of
+its hue, and sets the accent and the two glow colours from that.
+
+Only those three values move. Background, text, border and dim colours stay fixed, so no avatar can
+make the page unreadable. A greyscale avatar yields no usable hue, so it keeps the default rather
+than being forced into a colour.
 
 ## Abuse
 
