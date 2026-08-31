@@ -325,7 +325,9 @@ export default {
       if (!(await under(env.RL_FEED, ip))) return tooMany()
       const data = await feed(env, ctx, user, seenHost)
       if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
-      return Response.json(data, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
+      // FEED_TTL, not LIVE_TTL: a browser holding this for an hour cannot see the previews
+      // its own first visit just queued.
+      return Response.json(data, { headers: { 'cache-control': `max-age=${FEED_TTL}` } })
     }
 
     // Icons come from the profile picture, so they follow the avatar with nothing to commit.
@@ -359,8 +361,8 @@ export default {
     // The shell ships max-age=0, must-revalidate with no validator, so every repeat view is a
     // round trip that can only ever return the same bytes. Five minutes of browser cache makes a
     // second view free; the feed and the previews carry their own, shorter, freshness.
-    const page = async () => {
-      const r = await env.ASSETS.fetch(new Request(new URL('/', url), req))
+    const page = async (path = '/') => {
+      const r = await env.ASSETS.fetch(new Request(new URL(path, url), req))
       const h = new Headers(r.headers)
       h.set('cache-control', 'public, max-age=300')
       return new Response(r.body, { status: r.status, headers: h })
@@ -387,7 +389,7 @@ export default {
       if (!multiUser(env, url.hostname)) return page()
       const typed = String(url.searchParams.get('u') || '').toLowerCase()   // no-JS form fallback
       if (validUser(typed)) return Response.redirect(new URL(`/${typed}`, url).toString(), 302)
-      return env.ASSETS.fetch(new Request(new URL('/landing', url), req))
+      return page('/landing')
     }
 
     // A username is exactly one segment and must look like a username. Everything the Worker
