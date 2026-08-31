@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gitfolio</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="description" content="A portfolio that builds itself from a GitHub profile. Put any username after the slash.">
+<style>
+:root{--bg:#0a0a0b;--fg:#ededef;--dim:#8a8a92;--line:#1e1e21;--accent:#ffc107;
+  --glow1:255,193,7;--glow2:120,110,255}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);min-height:100vh;
+  font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;display:flex;align-items:center;
+  padding:clamp(2rem,7vw,5rem) clamp(1.25rem,6vw,3rem)}
+main{max-width:44rem;margin:0 auto;position:relative;z-index:1}
+h1{font-size:clamp(2rem,6vw,3.25rem);line-height:1.05;letter-spacing:-.035em;margin:0;font-weight:650}
+.sub{color:var(--dim);margin:1rem 0 0;font-size:clamp(1rem,2.4vw,1.1rem)}
+.sub b{color:var(--fg);font-weight:550}
+form{display:flex;gap:.6rem;margin:2.25rem 0 0;flex-wrap:wrap}
+label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+input{flex:1 1 16rem;min-width:0;background:color-mix(in srgb,var(--fg) 4%,var(--bg));
+  border:1px solid var(--line);border-radius:8px;padding:.7rem .85rem;color:var(--fg);
+  font:inherit;font-size:.95rem}
+input::placeholder{color:#6a6a72}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{background:var(--fg);color:var(--bg);border:0;border-radius:8px;padding:.7rem 1.1rem;
+  font:inherit;font-weight:550;font-size:.95rem;cursor:pointer}
+button:hover{background:var(--accent)}
+.hint{color:#9a9aa2;font-size:.84rem;margin:.7rem 0 0}
+.hint code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg)}
+h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+  font-weight:600;margin:2.75rem 0 .6rem}
+ul{margin:0;padding-left:1.1rem;color:var(--dim);font-size:.92rem}
+li{margin:.4rem 0}
+li b{color:var(--fg);font-weight:550}
+footer{margin-top:2.75rem;padding-top:1.25rem;border-top:1px solid var(--line);
+  color:#9a9aa2;font-size:.82rem}
+a{color:var(--fg);text-decoration:none;border-bottom:1px solid #33333a}
+a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+footer a{color:#9a9aa2;border:0}
+footer a:hover{color:var(--accent)}
+.fx{position:fixed;inset:-25%;pointer-events:none;z-index:0;
+  background:radial-gradient(38% 32% at 28% 12%,rgba(var(--glow1),.11),transparent 70%),
+             radial-gradient(34% 28% at 78% 4%,rgba(var(--glow2),.07),transparent 70%);
+  animation:drift 80s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(4%,3%,0) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){.fx{animation:none}}
+</style>
+</head>
+<body>
+<div class="fx"></div>
+<main>
+  <h1>gitfolio</h1>
+  <p class="sub">A portfolio that builds itself from a GitHub profile.
+    <b>Put a username after the slash.</b> Nothing to sign up for, nothing to configure.</p>
+
+  <form id="go" action="/" method="get">
+    <label for="u">GitHub username</label>
+    <input id="u" name="u" placeholder="github username" autocapitalize="off" autocorrect="off"
+           spellcheck="false" pattern="[A-Za-z0-9-]{1,39}" required>
+    <button type="submit">View portfolio</button>
+  </form>
+  <p class="hint">Or go straight there: <code>gitfolio.cpwillis.dev/&lt;username&gt;</code> — for example
+    <a href="/cpwillis">/cpwillis</a> or <a href="/torvalds">/torvalds</a>.</p>
+
+  <h2>What it does</h2>
+  <ul>
+    <li><b>Reads the profile at request time.</b> Name, location, repositories, languages and stars
+      come from the public GitHub API on every view. There is no database and nothing to update.</li>
+    <li><b>Screenshots the sites that are actually running.</b> A repository with a working homepage
+      gets a large card showing the live site. Everything else links to its source.</li>
+    <li><b>Keeps itself honest.</b> A project whose site goes down drops back to a small card on its
+      own, and returns when it comes back.</li>
+  </ul>
+
+  <h2>Themes</h2>
+  <p class="hint">Add <code>?theme=</code> to any page: <a href="/cpwillis?theme=space">space</a>,
+    <a href="/cpwillis?theme=cyberpunk">cyberpunk</a>, <a href="/cpwillis?theme=rainbow">rainbow</a>
+    or <a href="/cpwillis?theme=paper">paper</a>.</p>
+
+  <h2>Run your own</h2>
+  <p class="hint">It is one Worker and one HTML file, with no dependencies and no build step. Fork it,
+    set your username, deploy. A fork serves only its own account unless you opt in to more.</p>
+
+  <footer>
+    <a href="https://github.com/cpwillis/gitfolio" target="_blank" rel="noopener">Source on GitHub</a>
+    · <a href="https://cpwillis.dev/terms">Terms</a>
+    · <a href="https://cpwillis.dev/privacy">Privacy</a>
+  </footer>
+</main>
+<script>
+// take the typed username to /<username>; the form's plain GET is the no-JS fallback and the
+// Worker turns ?u= into the same thing
+document.getElementById('go').addEventListener('submit', e => {
+  const v = document.getElementById('u').value.trim()
+  if (!v) return
+  e.preventDefault()
+  location.href = '/' + encodeURIComponent(v)
+})
+</script>
+</body>
+</html>

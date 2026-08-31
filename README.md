@@ -45,21 +45,19 @@ Not `--local`. The browser binding is `"remote": true`, so the Worker runs local
 screenshots go to the real service. `--local` forces every binding local and screenshots fail
 silently. Check `npx wrangler@4 deploy --dry-run` lists `env.BROWSER` if previews never appear.
 
-`/<username>` does nothing locally, because `localhost` is not in `MULTI_USER_HOSTS` and the
-requested username is ignored on any host that is not listed. That is the gate working, not a bug.
-Rather than weakening the shipped config, override it for local runs only in `.dev.vars`:
+Because `wrangler.jsonc` declares a `custom_domain` route, `wrangler dev` presents that hostname to
+the Worker rather than `localhost`. So `MULTI_USER_HOSTS` matches locally exactly as it does in
+production, and `/<username>` works without any override.
 
-```
-MULTI_USER_HOSTS=localhost
-```
-
-`.dev.vars` is gitignored, so it never reaches a commit or a deployment.
+If you remove the route, or deploy to a `*.workers.dev` subdomain, the hostname will not match and
+every path will serve `GITHUB_USER` instead. Add the hostname you are actually on to
+`MULTI_USER_HOSTS`, or override it for local runs only in a gitignored `.dev.vars`.
 
 ## URLs
 
 | URL | Shows |
 | --- | --- |
-| `/` | the account in `GITHUB_USER` |
+| `/` | on a host in `MULTI_USER_HOSTS`, a landing page explaining the project. Otherwise the account in `GITHUB_USER` |
 | `/<username>` | that GitHub user, but only on a host listed in `MULTI_USER_HOSTS`. Otherwise every path serves `GITHUB_USER` |
 | `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `paper`. Anything else is the default |
 

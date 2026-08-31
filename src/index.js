@@ -253,6 +253,15 @@ export default {
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
+    // On a multi-user host, "/" is nobody's portfolio: it explains what this is and how to use it.
+    // A single-user deployment keeps "/" as its own profile, which is the whole point of a fork.
+    if (url.pathname === '/' && multiUser(env, url.hostname)) {
+      const typed = String(url.searchParams.get('u') || '').toLowerCase()   // no-JS form fallback
+      if (validUser(typed)) return Response.redirect(new URL(`/${typed}`, url).toString(), 302)
+      // '/landing', not '/landing.html': the asset router redirects the extension away
+      return env.ASSETS.fetch(new Request(new URL('/landing', url), req))
+    }
+
     return env.ASSETS.fetch(req)
   },
 }
