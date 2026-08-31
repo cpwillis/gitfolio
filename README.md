@@ -9,6 +9,10 @@ and the profile totals all come from the GitHub API at request time.
 Organisations work the same way: `/<orgname>` renders an organisation's public repositories, and the
 header drops the "Software engineer" line, which is not a claim to make about an organisation.
 
+The repository count comes from the profile, so it is the account's real total. Stars and languages
+are counted over the repositories actually fetched, which is one page of 100: for an account with
+more than that they describe the 100 most recently updated rather than everything.
+
 Commit totals are **not** shown. No endpoint used here carries one, and the only source is an
 authenticated GraphQL call covering just the last twelve months, so a figure labelled "commits"
 would be both an extra request and quietly wrong.

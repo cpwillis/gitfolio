@@ -123,6 +123,7 @@ const profile = (user, token) =>
     name: u.name || u.login,
     location: u.location || '',
     type: u.type || 'User',
+    publicRepos: u.public_repos || 0,
     followers: u.followers || 0,
     since: String(u.created_at || '').slice(0, 4),
   }), token)
@@ -190,12 +191,17 @@ async function roundAvatar(user) {
 // in the background, so a repo promotes itself on a later view.
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
-// Derived from the repos already fetched, so this costs no extra API call. Counted over the
-// visible list so the numbers agree with the cards on screen.
+// Derived from what has already been fetched, so this costs no extra API call.
+//
+// The repository count comes from the profile, not from the list: the repo endpoint returns one
+// page of 100, so an account with more than that would otherwise be told it has 98 repositories
+// when it has 576. Stars and languages are necessarily counted over the page we hold, so for an
+// account past 100 repos they describe the 100 most recently updated rather than everything.
+//
 // Commit totals are deliberately absent: no endpoint used here carries one, and the only source
 // is an authenticated GraphQL call that covers just the last twelve months.
 const tally = (list, who) => ({
-  repos: list.length,
+  repos: who?.publicRepos || list.length,
   stars: list.reduce((n, r) => n + (r.stars || 0), 0),
   languages: new Set(list.map(r => r.lang).filter(Boolean)).size,
   followers: who?.followers || 0,
