@@ -1,4 +1,6 @@
-# The API and the screenshot endpoints exist for this site's own pages, not for crawling.
+# "/" is the only page this deployment owns: the landing page on a multi-user host, or the
+# configured account's own portfolio on a personal one. Everything else is somebody else's GitHub
+# profile rendered on demand, which is not ours to have indexed and is an unbounded space to crawl.
 User-agent: *
-Disallow: /api/
-Disallow: /shot/
+Allow: /$
+Disallow: /
