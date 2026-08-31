@@ -178,6 +178,15 @@ const shotKey = (user, name) => `${user}/shot/${name}`
 
 // Capture and cache. Called in the background so a cold snapshot never blocks the page.
 async function capture(user, name, url, env) {
+  // capture() returns null on failure and nulls are never cached, so without this marker a repo
+  // that always fails would queue a fresh ~2s browser job on every request, forever. The guard is
+  // here rather than at the call sites because /shot and the feed both reach the browser through
+  // this one function, and the second call site had been added without it.
+  const pending = imgKey(`${user}/pending/${name}`)
+  if (await caches.default.match(pending)) return null
+  // claim the slot before the first await, so concurrent cold requests do not each queue a capture
+  await caches.default.put(pending, new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
+  if (!(await captureBudgetLeft(today()))) return null
   return cached(shotKey(user, name), async () => {
     try {
       // 1200 wide so the captured site renders its desktop layout, but lossy: the card paints it
@@ -271,17 +280,15 @@ async function buildFeed(env, ctx, user, host) {
     return { profile: who.data, stats: tally(list, who.data), owner: false, big: [], small: list }
   }
   const cache = caches.default
+  // waitUntil work counts against this invocation's subrequest quota (50 on Free), and each cold
+  // capture costs several. Queue a couple per request and let /shot pick up the rest on demand,
+  // in its own invocation, rather than 500ing the whole feed on an account with many live sites.
+  // ponytail: fixed cap, not a real scheduler. Raise it if the free ceiling ever moves.
+  let queued = 0
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
     if (await cache.match(imgKey(shotKey(user, r.name)))) return true
-    // capture() returns null on failure and nulls are never cached, so without this marker a repo
-    // that always fails would queue a fresh ~2s browser job on every request, forever.
-    const pending = `${user}/pending/${r.name}`
-    if (!(await cache.match(imgKey(pending)))) {
-      // claim the slot before returning, so concurrent cold requests do not each queue a capture
-      await cache.put(imgKey(pending), new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
-      if (await captureBudgetLeft(today())) ctx.waitUntil(capture(user, r.name, r.site, env))
-    }
+    if (queued++ < 2) ctx.waitUntil(capture(user, r.name, r.site, env))
     return false
   }))
   return {
