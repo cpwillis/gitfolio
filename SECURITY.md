@@ -21,16 +21,17 @@ GitHub data and serves a static page, so the realistic risks are narrow:
   decision to accept strangers' traffic against your GitHub rate limit.
 - **Screenshots.** Where multi-user is enabled, any GitHub user can be requested, but screenshots are taken
   **only** for the account in `GITHUB_USER`. Everyone else renders as small cards. This matters
-  because a repo `homepage` is attacker-controlled — anyone can create a public repo pointing
-  anywhere — so capturing for arbitrary users would turn the Worker into a screenshot proxy and
+  because a repo `homepage` is attacker-controlled (anyone can create a public repo pointing
+  anywhere), so capturing for arbitrary users would turn the Worker into a screenshot proxy and
   let a visitor spend the account's Browser Rendering quota. Widening this is a security change,
   not a feature.
 - **Outbound URLs.** Homepages are checked by `safeSite()` before any fetch: http(s) only, and no
   `localhost`, RFC1918, link-local, `.internal`, `.local`, or hostnames without a dot.
 - **Usernames.** Validated against GitHub's own rule and lowercased before use, so they cannot
   traverse paths or multiply cache entries.
-- **Profile fields.** Only `login`, `name` and `location` are forwarded. `email`, `company` and
-  `bio` are deliberately not exposed, so widening that is a privacy regression.
+- **Profile fields.** Only `login`, `name`, `location`, `type` and the public counts (repos,
+  followers, joined year) are forwarded. `email`, `company` and `bio` are deliberately not exposed,
+  so widening that is a privacy regression.
 
 ## Deploying your own
 

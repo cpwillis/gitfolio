@@ -15,7 +15,7 @@ options that stay off by default.
 npx wrangler@4 dev
 ```
 
-Not `--local` — see the README for why. There is nothing to install and no test suite; verify by
+Not `--local`, see the README for why. There is nothing to install and no test suite; verify by
 loading the page and checking the three stages resolve.
 
 Worth checking before opening a PR:

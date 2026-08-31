@@ -28,10 +28,6 @@ const setVersion = env => { VERSION = VERSION || env.CF_VERSION_METADATA.id }
 const key = k => new Request(`https://x/${VERSION}/${k}`)
 const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 
-// Two repos are never worth showing and both are derivable, so neither needs configuring:
-// the profile README (always named after the account) and the portfolio itself (its homepage
-// is the host you are reading this on).
-// GitHub usernames: alphanumeric and single hyphens, 39 max. Anything else is not a user.
 const RESERVED = new Set(['api', 'shot'])
 const STATIC = new Set(['/robots.txt', '/sitemap.xml'])
 
@@ -56,6 +52,7 @@ async function captureBudgetLeft(day) {
   }))
   return true
 }
+// GitHub usernames: alphanumeric and single hyphens, 39 max. Anything else is not a user.
 const USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/
 const validUser = u => typeof u === 'string' && USER_RE.test(u)
 
@@ -70,6 +67,9 @@ const safeSite = u => {
 }
 
 const bareHost = h => String(h || '').replace(/^www\./, '').toLowerCase()
+// Two repos are never worth showing and both are derivable, so neither needs configuring:
+// the profile README (always named after the account) and the portfolio itself (its homepage
+// is the host you are reading this on).
 const isSelf = (r, user, host, extra) => {
   const n = r.name.toLowerCase()
   if (n === user.toLowerCase()) return true
@@ -146,8 +146,7 @@ const repos = async (user, token) =>
       site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
     })), token))
 
-// Only login, name and location. Deliberately not exposing bio/company/email.
-// Public, non-identifying fields only. Still deliberately not exposing bio, company or email.
+// Public profile fields only. bio, company and email are never forwarded.
 // `type` is "User" or "Organization": the header must not call an organisation a software engineer.
 const profile = (user, token) =>
   ghCached(`${user}/profile`, `/users/${user}`, u => ({
@@ -219,8 +218,6 @@ async function roundAvatar(user) {
   }, imgKey)
 }
 
-// Split into big (live site + snapshot already cached) and small. Snapshot misses are captured
-// in the background, so a repo promotes itself on a later view.
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
 // Derived from what has already been fetched, so this costs no extra API call.
@@ -255,6 +252,7 @@ async function feed(env, ctx, user, host) {
   return data
 }
 
+// Split into big (live site + snapshot already cached) and small.
 async function buildFeed(env, ctx, user, host) {
   const [who, listed] = await Promise.all([profile(user, env.GITHUB_TOKEN), listFor(env, user, host)])
   const err = who.error || listed.error

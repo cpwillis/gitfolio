@@ -9,13 +9,8 @@ and the profile totals all come from the GitHub API at request time.
 Organisations work the same way: `/<orgname>` renders an organisation's public repositories, and the
 header drops the "Software engineer" line, which is not a claim to make about an organisation.
 
-The repository count comes from the profile, so it is the account's real total. Stars and languages
-are counted over the repositories actually fetched, which is one page of 100: for an account with
-more than that they describe the 100 most recently updated rather than everything.
-
-Commit totals are **not** shown. No endpoint used here carries one, and the only source is an
-authenticated GraphQL call covering just the last twelve months, so a figure labelled "commits"
-would be both an extra request and quietly wrong.
+The repository total comes from the profile. Stars and languages are counted over one page of 100
+repos, most recently updated. Commit totals are not shown: see the comment in `src/index.js`.
 
 ## Deploy
 
@@ -42,9 +37,9 @@ Cloudflare dashboard under **Workers & Pages > Builds** to deploy on every push.
 
 ### Other options
 
-- **Workers Builds** — push to deploy. Set the deploy command to `npx wrangler@4 deploy`.
-- **GitHub Actions** — `cloudflare/wrangler-action@v3` with `CLOUDFLARE_API_TOKEN` as a secret.
-- **No screenshots** — drop the `browser` binding. Every repo renders as a small card.
+- **Workers Builds**: push to deploy. Set the deploy command to `npx wrangler@4 deploy`.
+- **GitHub Actions**: `cloudflare/wrangler-action@v3` with `CLOUDFLARE_API_TOKEN` as a secret.
+- **No screenshots**: drop the `browser` binding. Every repo renders as a small card.
 
 ## Develop
 
@@ -114,13 +109,9 @@ just fragile.
 
 ## Themes
 
-Nine palettes via `?theme=`. Omit it and the accent is derived from the profile picture: the page
-samples the avatar the favicon route already inlines, takes a saturation-weighted circular mean of
-its hue, and sets the accent and the two glow colours from that.
-
-Only those three values move. Background, text, border and dim colours stay fixed, so no avatar can
-make the page unreadable. A greyscale avatar yields no usable hue, so it keeps the default rather
-than being forced into a colour.
+Nine palettes via `?theme=`, listed above. With none set, the accent is derived from the profile
+picture. Only the accent and the two glow colours move, so no avatar can make the page unreadable,
+and a greyscale one keeps the default.
 
 ## Abuse
 
@@ -134,11 +125,8 @@ Three ceilings, all in code so a fork inherits them:
   count uses the Cache API, which is not atomic, so it is deliberately approximate.
 - **`robots.txt`** keeps crawlers out of `/api/` and `/shot/`, which exist for this site's own pages.
 
-Screenshots are already owner-only, so a visitor cannot aim a capture at a URL they control.
-
-Anything beyond this belongs in front of the Worker rather than in it: Cloudflare WAF rules, or
-Bot Management if the account has it. `request.cf.botManagement` is not available on the Free plan,
-so there is deliberately no bot-score check in this code.
+Anything beyond this belongs in front of the Worker: Cloudflare WAF rules, or Bot Management
+(`request.cf.botManagement` is not on the Free plan, so there is no bot-score check here).
 
 ## Caching
 
@@ -159,8 +147,8 @@ costs well under a minute a day. Everything else is static assets and cached API
 
 ## Layout
 
-- `public/index.html` — the whole page, one `<style>` block, no dependencies
-- `src/index.js` — Worker: `/api/repos`, `/shot/*`, caching, liveness
+- `public/index.html`: the whole page, one `<style>` block, no dependencies
+- `src/index.js`: the Worker. `/api/repos`, `/shot/*`, caching, liveness
 
 Icons are your GitHub profile picture: `/favicon.ico` and `/apple-touch-icon.png` redirect to it,
 so there is nothing to commit and they follow your avatar when you change it.
