@@ -3,6 +3,13 @@
   "main": "src/index.js",
   // 2026-03-24+ is required for env.BROWSER.quickAction()
   "compatibility_date": "2026-03-24",
+  // custom_domain = true makes Cloudflare create and manage the DNS record on deploy. A plain
+  // zone route does NOT create DNS, which is the reason a route alone leaves the host unresolvable.
+  "routes": [
+    { "pattern": "gitfolio.cpwillis.dev", "custom_domain": true }
+    // gitfolio.online cannot go here until the domain is added to this Cloudflare account and its
+    // nameservers point at Cloudflare. Listing a zone the account does not hold fails the deploy.
+  ],
   // the only thing a fork needs to change
   "vars": {
     "GITHUB_USER": "cpwillis",
