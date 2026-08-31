@@ -36,6 +36,11 @@ const under = async (limiter, ip) => {
   try { return (await limiter.limit({ key: ip })).success } catch { return true }
 }
 const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after': '60' } })
+// Pages a person can reach by mistyping get a body. /api and /shot keep the bare status:
+// their callers are fetch() and <img>, neither of which reads one.
+const notFound = () => new Response(
+  '<!doctype html><meta charset="utf-8"><title>Not found</title><p>Not found. <a href="/">Home</a>',
+  { status: 404, headers: { 'content-type': 'text/html;charset=utf-8' } })
 
 // Captures are the only thing here that spends a metered resource, so they get a hard daily
 // ceiling on top of the per-repo back-off. Cache API is not atomic, so this is approximate by
@@ -379,9 +384,7 @@ export default {
     }
     // These are route prefixes, not people. "api" and "shot" are valid username shapes, so without
     // this /api would render a portfolio for a user named api.
-    if (segs.length === 1 && RESERVED.has(segs[0].toLowerCase())) {
-      return new Response(null, { status: 404 })
-    }
+    if (segs.length === 1 && RESERVED.has(segs[0].toLowerCase())) return notFound()
 
     if (segs.length === 0) {
       // On a multi-user host, "/" is nobody's portfolio: it explains what this is and how to use
@@ -394,9 +397,7 @@ export default {
 
     // A username is exactly one segment and must look like a username. Everything the Worker
     // genuinely serves has already returned above, so anything left is not a URL here.
-    if (segs.length > 1 || !validUser(segs[0].toLowerCase())) {
-      return new Response(null, { status: 404 })
-    }
+    if (segs.length > 1 || !validUser(segs[0].toLowerCase())) return notFound()
     return page()
   },
 }
