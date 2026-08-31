@@ -3,12 +3,16 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>cpwillis' GitFolio</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/svg+xml" id="ic">
 <script>
 // set before paint so the page never flashes the default palette
 {
   const t = new URLSearchParams(location.search).get('theme')
   if (/^[a-z]{1,16}$/.test(t || '')) document.documentElement.dataset.theme = t
+  // point the icon at the right avatar before anything is fetched, rather than loading the
+  // deployment owner's and swapping it once the feed lands
+  const u = location.pathname.slice(1).split('/')[0]
+  document.getElementById('ic').href = '/favicon.svg' + (u ? '?user=' + encodeURIComponent(u) : '')
 }
 </script>
 <meta name="description" content="A portfolio that builds itself from a GitHub profile.">
@@ -67,6 +71,7 @@ section:first-of-type h2{margin-top:clamp(1.5rem,4vw,2rem)}
 .sm span{margin-top:.3rem;font-size:.84rem;line-height:1.45}
 .sm em{display:block;margin-top:.5rem;font-style:normal;font-size:.74rem;color:#9a9aa2;
   font-variant-numeric:tabular-nums}
+#projects{min-height:min(70vh,700px)}
 .skel{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.75rem;margin-top:1.5rem}
 .skel i{display:block;height:7.5rem;border:1px solid var(--line);border-radius:10px;
   background:color-mix(in srgb,var(--fg) 4%,var(--bg));
@@ -85,7 +90,6 @@ footer{margin-top:clamp(3rem,8vw,5rem);padding-top:1.25rem;border-top:1px solid 
   color:#9a9aa2;font-size:.82rem;text-align:center}
 footer p{margin:0 auto;max-width:52rem}
 footer .links{margin-top:.45rem}
-footer .links a{color:var(--dim)}
 footer a{color:var(--dim);text-decoration:none}
 footer a:hover{color:var(--accent)}
 
@@ -180,7 +184,7 @@ footer a:hover{color:var(--accent)}
 // unreadable however garish an avatar is. /favicon.svg already inlines the avatar as a data URI,
 // so the canvas is never tainted and no extra image request happens.
 async function accentFromAvatar(q) {
-  if (new URLSearchParams(location.search).get('theme')) return
+  if (document.documentElement.dataset.theme) return   // an accepted theme wins over the avatar
   const svg = await (await fetch('/favicon.svg' + q)).text()
   const m = svg.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/)
   if (!m) return
@@ -301,7 +305,6 @@ async function accentFromAvatar(q) {
     // the full stop belongs to the sentence, so it only exists when there is a sentence
     document.getElementById('stop').textContent = role.textContent || loc.textContent ? '.' : ''
     if (profile?.login) {
-      document.querySelector('link[rel="icon"]').href = '/favicon.svg' + q
       accentFromAvatar(q).catch(() => {})   // decorative: never let it hold up the cards
     }
     host.textContent = ''
@@ -343,9 +346,8 @@ async function accentFromAvatar(q) {
     }
     group('wall', 'Live projects', big, true)
     group('grid', big.length ? 'Other repositories' : 'Repositories', small, false)
-    document.getElementById('tag').textContent = big.length
-      ? 'Open one. They are running right now.'
-      : 'Everything public, straight from GitHub.'
+    // the shipped tagline already covers the live case; only the other one needs saying
+    if (!big.length) document.getElementById('tag').textContent = 'Everything public, straight from GitHub.'
     if (!big.length && !small.length) host.append(el('p', 'feed', 'No public repositories to show.'))
     host.setAttribute('aria-busy', 'false')
   } catch (e) {
