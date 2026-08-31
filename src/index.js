@@ -57,7 +57,7 @@ const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, us
 // Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
 // this list not containing the name, so the two must never drift apart.
 const listFor = async (env, user, host) => {
-  const all = await repos(user)
+  const all = await repos(user, env.GITHUB_TOKEN)
   if (all.error) return all
   return { data: visible(all.data, user, host, isOwner(env, user) ? hideList(env) : []) }
 }
@@ -75,12 +75,19 @@ async function cached(k, build, mk = key) {
 // ponytail: a rate limit on a cold cache yields an empty feed. Move to KV if it ever bites.
 // Returns { data } or { error: <upstream status> }. The status is carried so a user who does not
 // exist (404) can be told so, rather than being blamed on the feed being down.
-async function ghCached(cacheKey, path, map) {
+async function ghCached(cacheKey, path, map, token) {
   const res = await cached(cacheKey, async () => {
     let status = 502
     try {
       const r = await fetch(`https://api.github.com${path}`, {
-        headers: { 'user-agent': 'gitfolio', accept: 'application/vnd.github+json' },
+        headers: {
+          'user-agent': 'gitfolio',
+          accept: 'application/vnd.github+json',
+          // Unauthenticated reads are capped at 60/hr per IP, and a Worker shares its egress IP
+          // with everyone else in the colo, so that budget runs out. A token raises it to 5000/hr.
+          // Optional: without it everything still works, just fragile under any real traffic.
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
       })
       status = r.status
       if (!r.ok) throw new Error(status)
@@ -95,7 +102,7 @@ async function ghCached(cacheKey, path, map) {
 }
 
 // Every public, non-fork repo on the profile. The unauthenticated endpoint returns public only.
-const repos = async user =>
+const repos = async (user, token) =>
   (await ghCached(`${user}/repos`, `/users/${user}/repos?per_page=100&sort=updated`, list =>
     list.filter(x => !x.fork && !x.private).map(x => ({
       name: x.name,
@@ -104,15 +111,15 @@ const repos = async user =>
       stars: x.stargazers_count,
       repoUrl: x.html_url,
       site: (site => (safeSite(site) ? site : null))(withScheme(x.homepage)),
-    }))))
+    })), token))
 
 // Only login, name and location. Deliberately not exposing bio/company/email.
-const profile = user =>
+const profile = (user, token) =>
   ghCached(`${user}/profile`, `/users/${user}`, u => ({
     login: u.login,
     name: u.name || u.login,
     location: u.location || '',
-  }))
+  }), token)
 
 async function live(url) {
   if (!url) return false
@@ -178,7 +185,7 @@ async function roundAvatar(user) {
 const isOwner = (env, user) => user === String(env.GITHUB_USER || '').toLowerCase()
 
 async function feed(env, ctx, user, host) {
-  const [who, listed] = await Promise.all([profile(user), listFor(env, user, host)])
+  const [who, listed] = await Promise.all([profile(user, env.GITHUB_TOKEN), listFor(env, user, host)])
   const err = who.error || listed.error
   // 404 means no such account; anything else is our problem, not the visitor's.
   if (err) return { error: err === 404 ? 404 : 503 }

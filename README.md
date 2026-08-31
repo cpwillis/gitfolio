@@ -85,6 +85,22 @@ still showing your other deployments. That host rule cannot fire on `*.workers.d
 If you put this behind a proxy or a second domain, forward the visitor's hostname as
 `x-forwarded-host` so the self-check sees the address the visitor actually typed.
 
+## Rate limits
+
+Unauthenticated GitHub reads are capped at 60 per hour **per IP**, and a Worker shares its egress IP
+with every other Worker in the same colo, so that budget is not really yours. Under any real traffic
+you will see `503`s as profiles fall out of cache and cannot be refetched.
+
+Set a token and the cap becomes 5000/hr:
+
+```bash
+npx wrangler@4 secret put GITHUB_TOKEN
+```
+
+A classic token with **no scopes** is enough: everything here reads public data only. Use
+`wrangler secret`, never a `var`, and never commit it. Without a token everything still works, it is
+just fragile.
+
 ## Caching
 
 Repo and profile data is keyed by the deployed Worker version, so **every deploy starts from a cold

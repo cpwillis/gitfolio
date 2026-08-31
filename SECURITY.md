@@ -34,5 +34,7 @@ GitHub data and serves a static page, so the realistic risks are narrow:
 
 ## Deploying your own
 
-`GITHUB_USER` and `HIDE_REPOS` are plain vars, not secrets, and are safe to commit. If you add a
-GitHub token to raise API rate limits, use `wrangler secret put` — never a var, and never commit it.
+`GITHUB_USER`, `HIDE_REPOS` and `MULTI_USER_HOSTS` are plain vars, not secrets, and are safe to
+commit. `GITHUB_TOKEN` is optional and raises the API rate limit; set it with `wrangler secret put`,
+never as a var, and never commit it. It only ever reads public data, so create it with no scopes:
+a scopeless token that leaks grants an attacker nothing beyond a higher rate limit.
