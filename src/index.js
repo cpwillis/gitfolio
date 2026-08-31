@@ -416,6 +416,14 @@ export default {
     // A username is exactly one segment and must look like a username. Everything the Worker
     // genuinely serves has already returned above, so anything left is not a URL here.
     if (segs.length > 1 || !validUser(segs[0].toLowerCase())) return notFound()
+    // A single-user deployment has exactly one profile and it lives at "/". Serving it again under
+    // every username shape gave a fork unlimited duplicate URLs, and put strangers' names in its
+    // paths. The owner's own name redirects rather than 404s, since people do type it.
+    if (!multiUser(env, url.hostname)) {
+      return segs[0].toLowerCase() === user
+        ? Response.redirect(new URL('/', url).toString(), 301)
+        : notFound()
+    }
     return page('/', segs[0].toLowerCase())
   },
 }

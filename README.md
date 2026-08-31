@@ -69,7 +69,7 @@ every path will serve `GITHUB_USER` instead. Add the hostname you are actually o
 | URL | Shows |
 | --- | --- |
 | `/` | on a host in `MULTI_USER_HOSTS`, a landing page explaining the project. Otherwise the account in `GITHUB_USER` |
-| `/<username>` | that GitHub user, but only on a host listed in `MULTI_USER_HOSTS`. Otherwise every path serves `GITHUB_USER` |
+| `/<username>` | that GitHub user, but only on a host listed in `MULTI_USER_HOSTS`. Otherwise only `/` exists: `/GITHUB_USER` redirects to it and anything else 404s |
 | `?theme=<name>` | a palette: `space`, `cyberpunk`, `rainbow`, `mono`, `forest`, `sunset`, `nord`, `slate`, `paper`. Omit it and the accent is derived from the profile picture |
 
 Combine them: `/torvalds?theme=space`. Themes are five CSS custom properties in
