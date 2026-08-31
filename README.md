@@ -26,14 +26,19 @@ in `wrangler.jsonc`:
 }
 ```
 
+Point `routes` at a host on your own Cloudflare account, or delete the array: deploying with
+someone else's zone in it fails.
+
 ```bash
 npx wrangler@4 deploy
 ```
 
-Change `"name"` too if you want the Worker called something else. The name and location in
-`public/index.html` are placeholders that JavaScript overwrites from your profile; edit them to
-match yours if you want the headline correct on first paint rather than a moment later. Connect the repo in the
-Cloudflare dashboard under **Workers & Pages > Builds** to deploy on every push.
+Change `"name"` too if you want the Worker called something else. The `<title>` at
+`public/index.html:5` and the `#nm` text and `#nml` href at `:110` ship as placeholders that
+JavaScript overwrites from the profile; edit them to match yours if you want the headline correct on
+first paint. A GitHub account with no display name set keeps the placeholders, so they are worth
+editing. Connect the repo in the Cloudflare dashboard under **Workers & Pages > Builds** to deploy
+on every push.
 
 ### Other options
 
@@ -96,7 +101,7 @@ If you put this behind a proxy or a second domain, forward the visitor's hostnam
 
 Unauthenticated GitHub reads are capped at 60 per hour **per IP**, and a Worker shares its egress IP
 with every other Worker in the same colo, so that budget is not really yours. Under any real traffic
-you will see `503`s as profiles fall out of cache and cannot be refetched.
+you will see `429`s as profiles fall out of cache and cannot be refetched.
 
 Set a token and the cap becomes 5000/hr:
 

@@ -25,7 +25,7 @@ GitHub data and serves a static page, so the realistic risks are narrow:
   anywhere), so capturing for arbitrary users would turn the Worker into a screenshot proxy and
   let a visitor spend the account's Browser Rendering quota. Widening this is a security change,
   not a feature.
-- **Outbound URLs.** Homepages are checked by `safeSite()` before any fetch: http(s) only, and no
+- **Outbound URLs.** Homepages are checked by `siteOrNull()` before any fetch: http(s) only, and no
   `localhost`, RFC1918, link-local, `.internal`, `.local`, or hostnames without a dot.
 - **Usernames.** Validated against GitHub's own rule and lowercased before use, so they cannot
   traverse paths or multiply cache entries.

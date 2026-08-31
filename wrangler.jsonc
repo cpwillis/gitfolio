@@ -8,7 +8,7 @@
   "routes": [
     { "pattern": "gitfolio.cpwillis.dev", "custom_domain": true }
   ],
-  // the only thing a fork needs to change
+  // a fork changes these, and the route above
   "vars": {
     "GITHUB_USER": "cpwillis",
     // optional: extra repo names to leave out, comma separated. A repo whose homepage is the site
@@ -41,7 +41,6 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    // only the dynamic routes hit the Worker; the page itself is served straight from assets
     // the Worker routes everything: an unmatched path must 404, not fall back to the page
     "run_worker_first": true
   }
