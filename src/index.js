@@ -171,8 +171,13 @@ const profile = (user, token) =>
     since: String(u.created_at || '').slice(0, 4),
   }), token)
 
-async function live(url) {
+async function live(url, selfHost) {
   if (!url) return false
+  // A repo whose homepage is this deployment is live by definition: we are the thing serving it.
+  // Fetching it loops back through the edge into this same Worker, re-entering its own per-IP
+  // page limit, and a self-request that is slower than the 2s budget gets cached as dead for an
+  // hour. Only reachable through a proxy, since on our own host the repo is hidden as self.
+  try { if (bareHost(new URL(url).hostname) === bareHost(selfHost)) return true } catch {}
   const res = await cached(`live/${encodeURIComponent(url)}`, async () => {
     let ok = false
     // no timeout here means one hung homepage stalls the entire feed response
@@ -262,11 +267,11 @@ const tally = (list, who) => ({
 // The assembled answer is cached per user and host for a short window. Everything it is built
 // from is cached individually too, but that still meant a profile read, a repo read and one
 // liveness read per repo on every single view.
-async function feed(env, ctx, user, host) {
+async function feed(env, ctx, user, host, selfHost) {
   const k = key(`feed/${user}/${bareHost(host)}`)
   const hit = await caches.default.match(k)
   if (hit) return hit.json()
-  const data = await buildFeed(env, ctx, user, host)
+  const data = await buildFeed(env, ctx, user, host, selfHost)
   // never cache an error: it must be retryable as soon as the underlying read recovers
   if (!data.error) {
     await caches.default.put(k, Response.json(data, { headers: { 'cache-control': `max-age=${FEED_TTL}` } }))
@@ -275,7 +280,7 @@ async function feed(env, ctx, user, host) {
 }
 
 // Split into big (live site + snapshot already cached) and small.
-async function buildFeed(env, ctx, user, host) {
+async function buildFeed(env, ctx, user, host, selfHost) {
   const [who, listed] = await Promise.all([profile(user, env.GITHUB_TOKEN), listFor(env, user, host)])
   const err = who.error || listed.error
   // 404 is no such account. 403/429 is GitHub throttling us, which is worth saying out loud
@@ -295,7 +300,7 @@ async function buildFeed(env, ctx, user, host) {
   // ponytail: fixed cap, not a scheduler. Raise it if the account's concurrency ever does.
   let queued = 0
   const state = await Promise.all(list.map(async r => {
-    if (!(await live(r.site))) return false
+    if (!(await live(r.site, selfHost))) return false
     if (await cache.match(imgKey(shotKey(user, r.name)))) return true
     // A repo already backing off must not consume the slot: it cannot capture anyway, and while
     // it holds the slot every repo after it in the list is never captured at all.
@@ -335,7 +340,7 @@ export default {
     // Stage 2: the page asks for this after it has already painted.
     if (url.pathname === '/api/repos') {
       if (!(await under(env.RL_FEED, ip))) return tooMany()
-      const data = await feed(env, ctx, user, seenHost)
+      const data = await feed(env, ctx, user, seenHost, url.hostname)
       if (data.error) return new Response(null, { status: data.error, headers: { 'cache-control': 'no-store' } })
       // FEED_TTL, not LIVE_TTL: a browser holding this for an hour cannot see the previews
       // its own first visit just queued.
@@ -361,7 +366,7 @@ export default {
       const warm = await caches.default.match(imgKey(shotKey(user, name)))
       if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
-      if (!r || !siteOrNull(r.site) || !(await live(r.site))) return new Response(null, { status: 404 })
+      if (!r || !siteOrNull(r.site) || !(await live(r.site, url.hostname))) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
