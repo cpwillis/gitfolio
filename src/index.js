@@ -30,7 +30,7 @@ const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 // Where the project itself lives. "/" is only the right attribution target on a multi-user host,
 // where it is the landing page; anywhere else "/" is the portfolio the footer sits on.
 const UPSTREAM = 'https://github.com/cpwillis/gitfolio'
-const RESERVED = new Set(['api', 'shot'])
+const RESERVED = new Set(['api', 'sc'])
 const STATIC = new Set(['/robots.txt'])
 
 // Rate limiters are keyed on the client IP. Absent bindings mean "allow": a fork that has not
@@ -40,7 +40,7 @@ const under = async (limiter, ip) => {
   try { return (await limiter.limit({ key: ip })).success } catch { return true }
 }
 const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after': '60' } })
-// Pages a person can reach by mistyping get a body. /api and /shot keep the bare status:
+// Pages a person can reach by mistyping get a body. /api and /sc keep the bare status:
 // their callers are fetch() and <img>, neither of which reads one.
 // A shot that is not there yet is a 404 the caller must be able to retry. Without no-store a
 // browser caches it heuristically, and then never asks again once the capture lands: the card keeps
@@ -111,7 +111,7 @@ const multiUser = (env, host) => {
 }
 const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, user, host, extra))
 
-// Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
+// Both /api/repos and /sc must agree on which repos exist. /sc's only repo-level refusal is
 // this list not containing the name, so the two must never drift apart.
 const listFor = async (env, user, host) => {
   const all = await repos(user, env.GITHUB_TOKEN)
@@ -253,7 +253,7 @@ const pendingKey = (user, name) => imgKey(`${user}/pending/${name}`)
 async function capture(user, name, url, env) {
   // capture() returns null on failure and nulls are never cached, so without this marker a repo
   // that always fails would queue a fresh ~2s browser job on every request, forever. The guard is
-  // here rather than at the call sites because /shot and the feed both reach the browser through
+  // here rather than at the call sites because /sc and the feed both reach the browser through
   // this one function, and the second call site had been added without it.
   const pending = pendingKey(user, name)
   if (await caches.default.match(pending)) return null
@@ -437,18 +437,22 @@ export default {
     const icon = { '/favicon.ico': 64, '/apple-touch-icon.png': 180 }[url.pathname]
     if (icon) return Response.redirect(`https://github.com/${user}.png?size=${icon}`, 302)
 
-    const m = url.pathname.match(/^\/shot\/(.+)\.png$/)
+    // /sc/<user>/<repo>. The account is a path segment, not a query default: the old
+    // /shot/<repo>.png?user= fell back to GITHUB_USER when the argument was left off, so one URL
+    // could mean different images on different deployments. No extension either, the bytes are webp.
+    const m = url.pathname.match(/^\/sc\/([^/]+)\/([^/]+)$/)
     if (m) {
-      if (!isOwner(env, user)) return noShot()
-      const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
+      const shotUser = decodeURIComponent(m[1]).toLowerCase()
+      if (!validUser(shotUser) || !isOwner(env, shotUser)) return noShot()
+      const name = decodeURIComponent(m[2])   // repo names are [A-Za-z0-9._-]
       // The common case is a warm image. Serve it before deriving the repo list or touching the
       // network: isOwner above is a string compare, so nothing expensive has happened yet.
-      const warm = await shotGet(env, user, name)
+      const warm = await shotGet(env, shotUser, name)
       if (warm) return warm
-      const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
+      const r = ((await listFor(env, shotUser, seenHost)).data || []).find(x => x.name === name)
       if (!r || !siteOrNull(r.site)) return noShot()
-      if (!(await liveness(user, [r], url.hostname))[r.site]) return noShot()
-      return (await capture(user, name, r.site, env)) || noShot()
+      if (!(await liveness(shotUser, [r], url.hostname))[r.site]) return noShot()
+      return (await capture(shotUser, name, r.site, env)) || noShot()
     }
 
     if (!(await under(env.RL_PAGE, ip))) return tooMany()
@@ -500,7 +504,7 @@ export default {
     if (segs.length === 1 && (segs[0] === 'landing' || segs[0] === 'landing.html')) {
       return Response.redirect(new URL('/', url).toString(), 302)
     }
-    // These are route prefixes, not people. "api" and "shot" are valid username shapes, so without
+    // These are route prefixes, not people. "api" and "sc" are valid username shapes, so without
     // this /api would render a portfolio for a user named api.
     if (segs.length === 1 && RESERVED.has(segs[0].toLowerCase())) return notFound()
 

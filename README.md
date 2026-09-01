@@ -77,7 +77,7 @@ Three stages, each independent, so nothing external delays first paint:
 
 1. `public/index.html` is served as a static asset. Never waits on GitHub.
 2. The page fetches `/api/repos`.
-3. Each large card pulls its screenshot from `/shot/<repo>.png`.
+3. Each large card pulls its screenshot from `/sc/<user>/<repo>`.
 
 A repo earns a large card once its site answers **and** its screenshot is cached. Misses are
 captured in the background, so a repo promotes itself on a later view and demotes itself if the
@@ -117,7 +117,7 @@ Outbound ceilings, all in code so a fork inherits them:
   created them still works, it just has no ceiling.
 - `CAPTURE_BUDGET` in `src/index.js`, 200 screenshots a day. Captures are the only metered thing
   here. The count uses the Cache API, which is not atomic, so it is deliberately approximate.
-- `public/robots.txt` allows `/` and disallows everything else, including `/api/` and `/shot/`.
+- `public/robots.txt` allows `/` and disallows everything else, including `/api/` and `/sc/`.
 
 Anything stricter belongs in front of the Worker: Cloudflare WAF rules, or Bot Management
 (`request.cf.botManagement` is not on the Free plan, so there is no bot-score check here).

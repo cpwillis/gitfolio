@@ -254,12 +254,14 @@ async function accentFromAvatar(q) {
     if (text != null) n.textContent = text   // textContent, so repo text can never inject markup
     return n
   }
-  const card = (r, isBig, i) => {
+  const card = (r, isBig, i, who) => {
     const a = el('a', 'card ' + (isBig ? 'big' : 'sm'))
     a.href = isBig ? r.site : r.repoUrl
     a.target = '_blank'; a.rel = 'noopener'
     if (isBig) {
-      const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png' + q
+      const img = el('img')
+      // /sc/<user>/<repo>: the account is in the path, so the URL identifies exactly one image.
+      img.src = '/sc/' + encodeURIComponent(who) + '/' + encodeURIComponent(r.name)
       img.alt = ''; img.width = 1200; img.height = 750; img.decoding = 'async'
       // A preview can 404: the shot was evicted between the feed being built and this request, or
       // its capture is still running. Without this the reserved 1200x750 box just renders empty.
@@ -316,7 +318,7 @@ async function accentFromAvatar(q) {
     }
     host.textContent = ''
     // a card is a link in a list of links, so say so rather than emitting a flat run of anchors
-    const group = (cls, heading, rows, big) => {
+    const group = (cls, heading, rows, big, who) => {
       if (!rows.length) return
       const sec = el('section')
       const id = cls + '-h'
@@ -324,7 +326,7 @@ async function accentFromAvatar(q) {
       sec.setAttribute('aria-labelledby', id)
       const ul = el('ul', cls)
       rows.forEach((r, i) => {
-        const li = el('li'); li.append(card(r, big, big ? i : i + 1)); ul.append(li)
+        const li = el('li'); li.append(card(r, big, big ? i : i + 1, who)); ul.append(li)
       })
       sec.append(h, ul); host.append(sec)
     }
@@ -351,8 +353,8 @@ async function accentFromAvatar(q) {
         li.append(a); box.append(li)
       }
     }
-    group('wall', 'Live projects', big, true)
-    group('grid', big.length ? 'Other repositories' : 'Repositories', small, false)
+    group('wall', 'Live projects', big, true, profile?.login || '')
+    group('grid', big.length ? 'Other repositories' : 'Repositories', small, false, profile?.login || '')
     // the shipped tagline already covers the live case; only the other one needs saying
     if (!big.length) document.getElementById('tag').textContent = 'Everything public, straight from GitHub.'
     if (!big.length && !small.length) host.append(el('p', 'feed', 'No public repositories to show.'))
