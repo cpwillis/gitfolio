@@ -178,20 +178,37 @@ const profile = (user, token) =>
     since: String(u.created_at || '').slice(0, 4),
   }), token)
 
-async function live(url, selfHost) {
-  if (!url) return false
-  // A repo whose homepage is this deployment is live by definition: we are the thing serving it.
-  // Fetching it loops back through the edge into this same Worker, re-entering its own per-IP
-  // page limit, and a self-request that is slower than the 2s budget gets cached as dead for an
-  // hour. Only reachable through a proxy, since on our own host the repo is hidden as self.
-  try { if (bareHost(new URL(url).hostname) === bareHost(selfHost)) return true } catch {}
-  const res = await cached(`live/${encodeURIComponent(url)}`, async () => {
-    let ok = false
+// A repo whose homepage is this deployment is live by definition: we are the thing serving it.
+// Fetching it loops back through the edge into this same Worker, re-entering its own per-IP page
+// limit, and a self-request slower than the 2s budget gets cached as dead for an hour.
+const isOwnHost = (url, selfHost) => {
+  try { return bareHost(new URL(url).hostname) === bareHost(selfHost) } catch { return false }
+}
+
+// Every homepage verdict in one cache entry, not one each. A feed build used to cost one cache read
+// per repo with a site, and three subrequests each when cold, which on an account with many live
+// sites approached the 50-subrequest ceiling. This is one read warm, and one read plus one write
+// however many are checked. Unknown URLs only: a verdict stands until the whole entry expires.
+async function liveness(user, list, selfHost) {
+  const k = key(`live/${user}`)
+  const hit = await caches.default.match(k)
+  const map = hit ? await hit.json() : {}
+  const todo = []
+  for (const r of list) {
+    if (!r.site) continue
+    if (isOwnHost(r.site, selfHost)) map[r.site] = true
+    else if (!(r.site in map)) todo.push(r.site)
+  }
+  if (todo.length) {
     // no timeout here means one hung homepage stalls the entire feed response
-    try { ok = (await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(2000) })).ok } catch { ok = false }
-    return new Response(ok ? '1' : '', { headers: { 'cache-control': `max-age=${LIVE_TTL}` } })
-  })
-  return (await res.text()) === '1'
+    const got = await Promise.all(todo.map(async u => {
+      try { return (await fetch(u, { redirect: 'follow', signal: AbortSignal.timeout(2000) })).ok }
+      catch { return false }
+    }))
+    todo.forEach((u, i) => { map[u] = got[i] })
+    await caches.default.put(k, Response.json(map, { headers: { 'cache-control': `max-age=${LIVE_TTL}` } }))
+  }
+  return map
 }
 
 const shotKey = (user, name) => `${user}/shot/${name}`
@@ -306,8 +323,9 @@ async function buildFeed(env, ctx, user, host, selfHost) {
   // pick up the next repo, because a captured one short-circuits above.
   // ponytail: fixed cap, not a scheduler. Raise it if the account's concurrency ever does.
   let queued = 0
+  const alive = await liveness(user, list, selfHost)
   const state = await Promise.all(list.map(async r => {
-    if (!(await live(r.site, selfHost))) return false
+    if (!r.site || !alive[r.site]) return false
     if (await cache.match(imgKey(shotKey(user, r.name)))) return true
     // A repo already backing off must not consume the slot: it cannot capture anyway, and while
     // it holds the slot every repo after it in the list is never captured at all.
@@ -373,7 +391,8 @@ export default {
       const warm = await caches.default.match(imgKey(shotKey(user, name)))
       if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
-      if (!r || !siteOrNull(r.site) || !(await live(r.site, url.hostname))) return new Response(null, { status: 404 })
+      if (!r || !siteOrNull(r.site)) return new Response(null, { status: 404 })
+      if (!(await liveness(user, [r], url.hostname))[r.site]) return new Response(null, { status: 404 })
       return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
     }
 
