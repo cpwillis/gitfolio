@@ -45,7 +45,8 @@ const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after'
 // A shot that is not there yet is a 404 the caller must be able to retry. Without no-store a
 // browser caches it heuristically, and then never asks again once the capture lands: the card keeps
 // an empty preview for as long as that cached 404 lives. Same rule the feed already follows.
-const noShot = () => new Response(null, { status: 404, headers: { 'cache-control': 'no-store' } })
+const noShot = () => new Response('No screenshot for that repository.\n',
+  { status: 404, headers: { 'content-type': 'text/plain;charset=utf-8', 'cache-control': 'no-store' } })
 const notFound = () => new Response(
   '<!doctype html><meta charset="utf-8"><title>Not found</title><p>Not found. <a href="/">Home</a>',
   { status: 404, headers: { 'content-type': 'text/html;charset=utf-8' } })
@@ -372,9 +373,9 @@ async function buildFeed(env, ctx, user, host, selfHost) {
     return { profile: who.data, stats: tally(list, who.data), owner: false, big: [], small: list }
   }
   const cache = caches.default
-  // One capture per request. Free allows 3 concurrent browsers per account and every colo builds
-  // its own feed, so anything higher races itself across colos and earns a 429. Successive views
-  // pick up the next repo, because a captured one short-circuits above.
+  // Two captures per request. Free allows 3 concurrent browsers, and since screenshots live in R2 a
+  // capture happens once for the whole world rather than once per colo, so the demand is a fraction
+  // of what it was. Successive views pick up the next repo, because a captured one returns above.
   // ponytail: fixed cap, not a scheduler. Raise it if the account's concurrency ever does.
   let queued = 0
   const alive = await liveness(user, list, selfHost)
@@ -385,7 +386,7 @@ async function buildFeed(env, ctx, user, host, selfHost) {
     // A repo already backing off must not consume the slot: it cannot capture anyway, and while
     // it holds the slot every repo after it in the list is never captured at all.
     if (await cache.match(pendingKey(user, r.name))) return false
-    if (queued++ < 1) ctx.waitUntil(capture(user, r.name, r.site, env))
+    if (queued++ < 2) ctx.waitUntil(capture(user, r.name, r.site, env))
     return false
   }))
   return {
