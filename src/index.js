@@ -26,6 +26,9 @@ const setVersion = env => { VERSION = VERSION || env.CF_VERSION_METADATA.id }
 const key = k => new Request(`https://x/${VERSION}/${k}`)
 const imgKey = k => new Request(`https://x/img${CACHE_V}/${k}`)
 
+// Where the project itself lives. "/" is only the right attribution target on a multi-user host,
+// where it is the landing page; anywhere else "/" is the portfolio the footer sits on.
+const UPSTREAM = 'https://github.com/cpwillis/gitfolio'
 const RESERVED = new Set(['api', 'shot'])
 const STATIC = new Set(['/robots.txt'])
 
@@ -376,6 +379,10 @@ export default {
       const canon = `https://${url.host}${who && multiUser(env, url.hostname) ? '/' + who : '/'}`
       let rw = new HTMLRewriter()
         .on('head', { element: e => e.append(`<link rel="canonical" href="${canon}">`, { html: true }) })
+      // On a single-user deployment "/" is this very page, so the attribution would link to itself.
+      if (!multiUser(env, url.hostname)) {
+        rw = rw.on('#gen', { element: e => e.setAttribute('href', UPSTREAM) })
+      }
       if (!who) return rw.transform(res)
       // Crawlers and link unfurlers do not run the page's JavaScript, so without this every shared
       // link is titled for whoever the deployment ships pointing at. who is already through
