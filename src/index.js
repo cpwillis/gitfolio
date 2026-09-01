@@ -42,6 +42,10 @@ const under = async (limiter, ip) => {
 const tooMany = () => new Response(null, { status: 429, headers: { 'retry-after': '60' } })
 // Pages a person can reach by mistyping get a body. /api and /shot keep the bare status:
 // their callers are fetch() and <img>, neither of which reads one.
+// A shot that is not there yet is a 404 the caller must be able to retry. Without no-store a
+// browser caches it heuristically, and then never asks again once the capture lands: the card keeps
+// an empty preview for as long as that cached 404 lives. Same rule the feed already follows.
+const noShot = () => new Response(null, { status: 404, headers: { 'cache-control': 'no-store' } })
 const notFound = () => new Response(
   '<!doctype html><meta charset="utf-8"><title>Not found</title><p>Not found. <a href="/">Home</a>',
   { status: 404, headers: { 'content-type': 'text/html;charset=utf-8' } })
@@ -428,16 +432,16 @@ export default {
 
     const m = url.pathname.match(/^\/shot\/(.+)\.png$/)
     if (m) {
-      if (!isOwner(env, user)) return new Response(null, { status: 404 })
+      if (!isOwner(env, user)) return noShot()
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
       // The common case is a warm image. Serve it before deriving the repo list or touching the
       // network: isOwner above is a string compare, so nothing expensive has happened yet.
       const warm = await shotGet(env, user, name)
       if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
-      if (!r || !siteOrNull(r.site)) return new Response(null, { status: 404 })
-      if (!(await liveness(user, [r], url.hostname))[r.site]) return new Response(null, { status: 404 })
-      return (await capture(user, name, r.site, env)) || new Response(null, { status: 404 })
+      if (!r || !siteOrNull(r.site)) return noShot()
+      if (!(await liveness(user, [r], url.hostname))[r.site]) return noShot()
+      return (await capture(user, name, r.site, env)) || noShot()
     }
 
     if (!(await under(env.RL_PAGE, ip))) return tooMany()
