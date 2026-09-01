@@ -405,6 +405,7 @@ export default {
           `<meta property="og:description" content="Public GitHub projects by ${who}.">` +
           `<meta property="og:url" content="${canon}">` +
           `<meta property="og:image" content="https://github.com/${who}.png?size=460">` +
+          `<meta property="og:image:alt" content="GitHub avatar for ${who}">` +
           `<meta name="twitter:card" content="summary">`, { html: true }) })
         .transform(res)
     }
