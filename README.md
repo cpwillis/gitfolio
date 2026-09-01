@@ -20,9 +20,9 @@ Ships pointing at `cpwillis`, so it runs before you change anything. Fork, then 
 - `routes` points at `gitfolio.cpwillis.dev`, which is not your zone. Point it at a host on your own
   Cloudflare account, or delete the array. Deploying with someone else's zone in it fails.
 - `vars.GITHUB_USER`: your account. Everything else follows from it.
-- `vars.MULTI_USER_HOSTS`: ships listing the author's host, so it never matches a fork. Left empty,
-  the deployment only ever serves `GITHUB_USER`, whatever path is requested. Add your own hostname
-  only if you want `/<username>` to render strangers against your GitHub rate limit.
+- `vars.MULTI_USER_HOSTS`: `false` or empty serves only `GITHUB_USER`, whatever path is requested.
+  `true` or `*` serves anyone at `/<username>`, against your GitHub rate limit. A comma separated
+  host list turns it on for those hostnames only, which is what this deployment uses.
 - `vars.HIDE_REPOS`: extra repo names to leave out, comma separated. Normally empty.
 - `name`: the Worker's name. Optional.
 
@@ -61,8 +61,8 @@ gitignored `.dev.vars`.
 
 ## URLs
 
-- `/`: the landing page on a host in `MULTI_USER_HOSTS`, otherwise `GITHUB_USER`'s own portfolio.
-- `/<username>`: that user, on a `MULTI_USER_HOSTS` host only. Elsewhere `/GITHUB_USER` 301s to `/`
+- `/`: the landing page when `MULTI_USER_HOSTS` is on, otherwise `GITHUB_USER`'s own portfolio.
+- `/<username>`: that user, only where `MULTI_USER_HOSTS` is on. Elsewhere `/GITHUB_USER` 301s to `/`
   and anything else 404s.
 - `?theme=<name>`: `space`, `cyberpunk`, `rainbow`, `mono`, `forest`, `sunset`, `nord`, `slate`,
   `paper`. Omit it and the accent is derived from the profile picture.

@@ -96,7 +96,14 @@ const hideList = env => csv(env.HIDE_REPOS)
 // Serving other people's profiles is opt-in per hostname. A fork inherits this config pointing at
 // somebody else's domains, so it never matches and the deployment only ever serves its own
 // account: nobody can drive a stranger's Worker by asking it for arbitrary usernames.
-const multiUser = (env, host) => csv(env.MULTI_USER_HOSTS).includes(bareHost(host))
+// "true" or "*" serves anyone on any host, "false" or empty serves only GITHUB_USER. A comma
+// separated host list is still honoured, for a deployment that wants it on one hostname only.
+const multiUser = (env, host) => {
+  const v = String(env.MULTI_USER_HOSTS || '').trim().toLowerCase()
+  if (!v || v === 'false') return false
+  if (v === 'true' || v === '*') return true
+  return csv(v).includes(bareHost(host))
+}
 const visible = (list, user, host, extra = []) => list.filter(r => !isSelf(r, user, host, extra))
 
 // Both /api/repos and /shot must agree on which repos exist. /shot's only repo-level refusal is
