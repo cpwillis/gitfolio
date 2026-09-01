@@ -2,7 +2,8 @@ const CACHE_V = 10        // image payloads and capture-cost bookkeeping: surviv
 const REPOS_TTL = 3600
 const LIVE_TTL = 3600     // a dead site demotes within the hour; every check is an outbound call
 const SHOT_TTL = 604800   // a week: every expiry is a fresh browser job against 10 min/day
-const PENDING_TTL = 3600  // back-off before retrying a capture that failed
+const BUSY_BACKOFF = 60   // a 429 is the account's browser concurrency, so retry soon
+const FAIL_BACKOFF = 3600 // a site that will not render: stop asking for an hour
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
 const CAPTURE_BUDGET = 200   // screenshots per day, a backstop under the browser-minute quota
@@ -222,8 +223,10 @@ async function capture(user, name, url, env) {
   // this one function, and the second call site had been added without it.
   const pending = pendingKey(user, name)
   if (await caches.default.match(pending)) return null
+  const backOff = ttl => caches.default.put(pending,
+    new Response('1', { headers: { 'cache-control': `max-age=${ttl}` } }))
   // claim the slot before the first await, so concurrent cold requests do not each queue a capture
-  await caches.default.put(pending, new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
+  await backOff(BUSY_BACKOFF)
   if (!(await captureBudgetLeft(today()))) return null
   return cached(shotKey(user, name), async () => {
     try {
@@ -235,14 +238,21 @@ async function capture(user, name, url, env) {
         viewport: { width: 1200, height: 750 },
         screenshotOptions: { type: 'webp', quality: 80 },
       })
-      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
-      return new Response(r.body, {
-        headers: {
-          'content-type': r.headers.get('content-type') || 'image/webp',
-          'cache-control': `max-age=${SHOT_TTL}`,
-        },
-      })
+      if (r.ok) {
+        return new Response(r.body, {
+          headers: {
+            'content-type': r.headers.get('content-type') || 'image/webp',
+            'cache-control': `max-age=${SHOT_TTL}`,
+          },
+        })
+      }
+      // 429 means the account ran out of concurrent browsers, which says nothing about this site,
+      // so the short claim stands and the next view retries. Anything else is the site's problem.
+      if (r.status !== 429) await backOff(FAIL_BACKOFF)
+      console.error(`screenshot failed for ${name} (${url}): ${r.status} ${await r.text()}`)
+      return null
     } catch (e) {
+      await backOff(FAIL_BACKOFF)
       console.error(`screenshot failed for ${name} (${url}):`, e.message)
       return null
     }
