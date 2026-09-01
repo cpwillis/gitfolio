@@ -68,6 +68,9 @@ section:first-of-type h2{margin-top:clamp(1.5rem,4vw,2rem)}
 .big b{padding:.85rem 1rem .1rem}
 .big span{padding:0 1rem 1rem}
 .sm{padding:.85rem .95rem}
+/* a preview that failed leaves a text card in the wide grid: let it sit at its own height
+   rather than stretch to match the cards that still have an image */
+.wall .sm{align-self:start}
 .sm span{margin-top:.3rem;font-size:.84rem;line-height:1.45}
 .sm em{display:block;margin-top:.5rem;font-style:normal;font-size:.74rem;color:var(--dim);
   font-variant-numeric:tabular-nums}
@@ -258,6 +261,10 @@ async function accentFromAvatar(q) {
     if (isBig) {
       const img = el('img'); img.src = '/shot/' + encodeURIComponent(r.name) + '.png' + q
       img.alt = ''; img.width = 1200; img.height = 750; img.decoding = 'async'
+      // A preview can 404: the shot was evicted between the feed being built and this request, or
+      // its capture is still running. Without this the reserved 1200x750 box just renders empty.
+      // The repo is still live and the link still works, so degrade to a plain card, do not hide it.
+      img.onerror = () => { img.remove(); a.className = 'card sm' }
       // the first preview is the LCP element and is above the fold, so it must not be lazy
       img.loading = i ? 'lazy' : 'eager'
       img.fetchPriority = i ? 'auto' : 'high'
