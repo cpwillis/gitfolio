@@ -241,7 +241,10 @@ async function shotsPresent(env, user, names) {
     return new Set(names.filter((_, i) => hits[i]))
   }
   const { objects } = await env.SHOTS.list({ prefix: `${user}/` })
-  const have = new Set(objects.map(o => o.key))
+  // R2 objects have no expiry, so without this a screenshot taken once would be kept for good and
+  // a redesigned site would never update. Treat an old one as absent and it gets retaken.
+  const fresh = Date.now() - SHOT_TTL * 1000
+  const have = new Set(objects.filter(o => o.uploaded.getTime() > fresh).map(o => o.key))
   return new Set(names.filter(n => have.has(shotObj(user, n))))
 }
 const pendingKey = (user, name) => imgKey(`${user}/pending/${name}`)
@@ -282,6 +285,10 @@ async function screenshot(env, name, url, backOff) {
       url,
       viewport: { width: 1200, height: 750 },
       screenshotOptions: { type: 'webp', quality: 80 },
+      // Browser Run defaults to domcontentloaded, which fires before a page's JavaScript has
+      // rendered anything: a site that loads its content on boot was captured half empty.
+      // networkidle2, not networkidle0, because a page with an analytics beacon never fully idles.
+      gotoOptions: { waitUntil: 'networkidle2' },
     })
     if (r.ok) return await r.arrayBuffer()
     // 429 means the account ran out of concurrent browsers, which says nothing about this site, so
