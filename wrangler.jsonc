@@ -32,6 +32,12 @@
   "version_metadata": {
     "binding": "CF_VERSION_METADATA"
   },
+  // Screenshots. caches.default is per colo and evicts, so a card would lose its preview and the
+  // re-capture would hit the account's browser concurrency limit. Optional: without it the Worker
+  // falls back to the cache, which is what a fork with no bucket gets.
+  "r2_buckets": [
+    { "binding": "SHOTS", "bucket_name": "gitfolio-shots" }
+  ],
   "browser": {
     "binding": "BROWSER",
     // local dev only: proxy to real Browser Rendering instead of a local stub

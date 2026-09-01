@@ -213,6 +213,33 @@ async function liveness(user, list, selfHost) {
 }
 
 const shotKey = (user, name) => `${user}/shot/${name}`
+const shotObj = (user, name) => `${user}/${name}.webp`
+
+// Screenshots live in R2 when a bucket is bound. caches.default is per colo and evicts whenever it
+// likes, so a card that had a preview would drop back to a small one and the re-capture would land
+// on the account's browser concurrency limit. R2 keeps an image until it is replaced, and one
+// object is shared by every colo. Without the binding the old cache path still works, so a fork
+// with no bucket loses nothing but the stability.
+const shotHeaders = { 'content-type': 'image/webp', 'cache-control': `public, max-age=${SHOT_TTL}` }
+
+async function shotGet(env, user, name) {
+  if (env.SHOTS) {
+    const o = await env.SHOTS.get(shotObj(user, name))
+    return o ? new Response(o.body, { headers: shotHeaders }) : null
+  }
+  return (await caches.default.match(imgKey(shotKey(user, name)))) || null
+}
+
+// One call answers "which of these already have an image", instead of one lookup per repo.
+async function shotsPresent(env, user, names) {
+  if (!env.SHOTS) {
+    const hits = await Promise.all(names.map(n => caches.default.match(imgKey(shotKey(user, n)))))
+    return new Set(names.filter((_, i) => hits[i]))
+  }
+  const { objects } = await env.SHOTS.list({ prefix: `${user}/` })
+  const have = new Set(objects.map(o => o.key))
+  return new Set(names.filter(n => have.has(shotObj(user, n))))
+}
 const pendingKey = (user, name) => imgKey(`${user}/pending/${name}`)
 
 // Capture and cache. Called in the background so a cold snapshot never blocks the page.
@@ -228,35 +255,41 @@ async function capture(user, name, url, env) {
   // claim the slot before the first await, so concurrent cold requests do not each queue a capture
   await backOff(BUSY_BACKOFF)
   if (!(await captureBudgetLeft(today()))) return null
-  return cached(shotKey(user, name), async () => {
-    try {
-      // 1200 wide so the captured site renders its desktop layout, but lossy: the card paints it
-      // about 325px wide and a lossless PNG of a screenshot is far larger than it needs to be.
-      // quality is rejected alongside the default png type, so both must be set together.
-      const r = await env.BROWSER.quickAction('screenshot', {
-        url,
-        viewport: { width: 1200, height: 750 },
-        screenshotOptions: { type: 'webp', quality: 80 },
-      })
-      if (r.ok) {
-        return new Response(r.body, {
-          headers: {
-            'content-type': r.headers.get('content-type') || 'image/webp',
-            'cache-control': `max-age=${SHOT_TTL}`,
-          },
-        })
-      }
-      // 429 means the account ran out of concurrent browsers, which says nothing about this site,
-      // so the short claim stands and the next view retries. Anything else is the site's problem.
-      if (r.status !== 429) await backOff(FAIL_BACKOFF)
-      console.error(`screenshot failed for ${name} (${url}): ${r.status} ${await r.text()}`)
-      return null
-    } catch (e) {
-      await backOff(FAIL_BACKOFF)
-      console.error(`screenshot failed for ${name} (${url}):`, e.message)
-      return null
-    }
-  }, imgKey)
+  if (env.SHOTS) {
+    const shot = await screenshot(env, name, url, backOff)
+    if (!shot) return null
+    await env.SHOTS.put(shotObj(user, name), shot, { httpMetadata: { contentType: 'image/webp' } })
+    return new Response(shot, { headers: shotHeaders })
+  }
+  const shot = await screenshot(env, name, url, backOff)
+  if (!shot) return null
+  const res = new Response(shot, { headers: shotHeaders })
+  await caches.default.put(imgKey(shotKey(user, name)), res.clone())
+  return res
+}
+
+// The browser call itself. Returns the image bytes, or null after recording the right back-off.
+async function screenshot(env, name, url, backOff) {
+  try {
+    // 1200 wide so the captured site renders its desktop layout, but lossy: the card paints it
+    // about 325px wide and a lossless PNG of a screenshot is far larger than it needs to be.
+    // quality is rejected alongside the default png type, so both must be set together.
+    const r = await env.BROWSER.quickAction('screenshot', {
+      url,
+      viewport: { width: 1200, height: 750 },
+      screenshotOptions: { type: 'webp', quality: 80 },
+    })
+    if (r.ok) return await r.arrayBuffer()
+    // 429 means the account ran out of concurrent browsers, which says nothing about this site, so
+    // the short claim stands and the next view retries. Anything else is the site's problem.
+    if (r.status !== 429) await backOff(FAIL_BACKOFF)
+    console.error(`screenshot failed for ${name} (${url}): ${r.status} ${await r.text()}`)
+    return null
+  } catch (e) {
+    await backOff(FAIL_BACKOFF)
+    console.error(`screenshot failed for ${name} (${url}):`, e.message)
+    return null
+  }
 }
 
 
@@ -334,9 +367,10 @@ async function buildFeed(env, ctx, user, host, selfHost) {
   // ponytail: fixed cap, not a scheduler. Raise it if the account's concurrency ever does.
   let queued = 0
   const alive = await liveness(user, list, selfHost)
+  const haveShot = await shotsPresent(env, user, list.map(r => r.name))
   const state = await Promise.all(list.map(async r => {
     if (!r.site || !alive[r.site]) return false
-    if (await cache.match(imgKey(shotKey(user, r.name)))) return true
+    if (haveShot.has(r.name)) return true
     // A repo already backing off must not consume the slot: it cannot capture anyway, and while
     // it holds the slot every repo after it in the list is never captured at all.
     if (await cache.match(pendingKey(user, r.name))) return false
@@ -398,7 +432,7 @@ export default {
       const name = m[1]   // repo names are [A-Za-z0-9._-], so there is nothing to decode
       // The common case is a warm image. Serve it before deriving the repo list or touching the
       // network: isOwner above is a string compare, so nothing expensive has happened yet.
-      const warm = await caches.default.match(imgKey(shotKey(user, name)))
+      const warm = await shotGet(env, user, name)
       if (warm) return warm
       const r = ((await listFor(env, user, seenHost)).data || []).find(x => x.name === name)
       if (!r || !siteOrNull(r.site)) return new Response(null, { status: 404 })
