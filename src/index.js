@@ -1,7 +1,7 @@
 const CACHE_V = 10        // image payloads and capture-cost bookkeeping: survives a deploy
 const REPOS_TTL = 3600
 const LIVE_TTL = 3600     // a dead site demotes within the hour; every check is an outbound call
-const SHOT_TTL = 86400
+const SHOT_TTL = 604800   // a week: every expiry is a fresh browser job against 10 min/day
 const PENDING_TTL = 3600  // back-off before retrying a capture that failed
 const FAIL_TTL = 120      // how long a failed GitHub read is remembered
 const FEED_TTL = 120      // the assembled /api/repos answer, so a repeat view is one cache read
@@ -183,6 +183,7 @@ async function live(url) {
 }
 
 const shotKey = (user, name) => `${user}/shot/${name}`
+const pendingKey = (user, name) => imgKey(`${user}/pending/${name}`)
 
 // Capture and cache. Called in the background so a cold snapshot never blocks the page.
 async function capture(user, name, url, env) {
@@ -190,7 +191,7 @@ async function capture(user, name, url, env) {
   // that always fails would queue a fresh ~2s browser job on every request, forever. The guard is
   // here rather than at the call sites because /shot and the feed both reach the browser through
   // this one function, and the second call site had been added without it.
-  const pending = imgKey(`${user}/pending/${name}`)
+  const pending = pendingKey(user, name)
   if (await caches.default.match(pending)) return null
   // claim the slot before the first await, so concurrent cold requests do not each queue a capture
   await caches.default.put(pending, new Response('1', { headers: { 'cache-control': `max-age=${PENDING_TTL}` } }))
@@ -288,15 +289,18 @@ async function buildFeed(env, ctx, user, host) {
     return { profile: who.data, stats: tally(list, who.data), owner: false, big: [], small: list }
   }
   const cache = caches.default
-  // waitUntil work counts against this invocation's subrequest quota (50 on Free), and each cold
-  // capture costs several. Queue a couple per request and let /shot pick up the rest on demand,
-  // in its own invocation, rather than 500ing the whole feed on an account with many live sites.
-  // ponytail: fixed cap, not a real scheduler. Raise it if the free ceiling ever moves.
+  // One capture per request. Free allows 3 concurrent browsers per account and every colo builds
+  // its own feed, so anything higher races itself across colos and earns a 429. Successive views
+  // pick up the next repo, because a captured one short-circuits above.
+  // ponytail: fixed cap, not a scheduler. Raise it if the account's concurrency ever does.
   let queued = 0
   const state = await Promise.all(list.map(async r => {
     if (!(await live(r.site))) return false
     if (await cache.match(imgKey(shotKey(user, r.name)))) return true
-    if (queued++ < 2) ctx.waitUntil(capture(user, r.name, r.site, env))
+    // A repo already backing off must not consume the slot: it cannot capture anyway, and while
+    // it holds the slot every repo after it in the list is never captured at all.
+    if (await cache.match(pendingKey(user, r.name))) return false
+    if (queued++ < 1) ctx.waitUntil(capture(user, r.name, r.site, env))
     return false
   }))
   return {
