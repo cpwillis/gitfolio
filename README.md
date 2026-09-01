@@ -67,7 +67,7 @@ gitignored `.dev.vars`.
 - `?theme=<name>`: `space`, `cyberpunk`, `rainbow`, `mono`, `forest`, `sunset`, `nord`, `slate`,
   `paper`. Omit it and the accent is derived from the profile picture.
 
-Combine them: `/torvalds?theme=space`. A theme is eight custom properties in `public/index.html`;
+Combine them: `/octocat?theme=space`. A theme is eight custom properties in `public/index.html`;
 copy a block and change the values to add one. The avatar-derived accent moves only three of them,
 so no avatar can make the page unreadable.
 
