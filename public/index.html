@@ -98,7 +98,9 @@ footer a:hover{color:var(--accent)}
 
 /* --- background: drifting glow + slow starfield --- */
 .fx{position:fixed;inset:0;pointer-events:none;z-index:0}
-.fx-glow{inset:-25%;
+/* will-change: the layer is 1.5x the viewport of radial gradient, and the animated scale() makes
+   Chrome re-raster all of it mid-scroll without this. Promoted once, the drift is compositor-only. */
+.fx-glow{inset:-25%;will-change:transform;
   background:radial-gradient(38% 32% at 28% 12%,rgba(var(--glow1),.11),transparent 70%),
              radial-gradient(34% 28% at 78% 4%,rgba(var(--glow2),.07),transparent 70%);
   animation:drift 80s ease-in-out infinite alternate}
@@ -169,15 +171,21 @@ footer a:hover{color:var(--accent)}
       x.beginPath(); x.arc(d.x, d.y, d.r, 0, 7); x.fill()
     }
   }
-  const tick = () => {
-    for (const d of dots) { d.x = (d.x + d.vx + w) % w; d.y = (d.y + d.vy + h) % h }
-    paint()
+  // 30fps, stepped by elapsed time: the drift is a few px a second, so repainting a full-viewport
+  // canvas at 120Hz buys nothing and competes with the scroll for the main thread.
+  let prev = 0
+  const tick = (t) => {
     if (!still.matches) requestAnimationFrame(tick)
+    if (t - prev < 32) return
+    const dt = Math.min(6, (t - prev) / 16.7)
+    prev = t
+    for (const d of dots) { d.x = (d.x + d.vx * dt + w) % w; d.y = (d.y + d.vy * dt + h) % h }
+    paint()
   }
   // resize only re-seeds; it must not start a second rAF loop
   addEventListener('resize', () => { reset(); if (still.matches) paint() })
   reset()
-  still.matches ? paint() : tick()
+  still.matches ? paint() : requestAnimationFrame(tick)
 }
 </script>
 
